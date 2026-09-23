@@ -1279,9 +1279,10 @@ rxvt_font_xft::load (const rxvt_fontprop &prop, bool force_prop)
           break;
         }
 
-      ascent  = (face->size->metrics.ascender + 63) >> 6;
-      descent = (-face->size->metrics.descender + 63) >> 6;
-      height  = max (ascent + descent, (face->size->metrics.height + 63) >> 6);
+      // Match Xft's advertised line metrics, as xterm does.
+      ascent  = f->ascent;
+      descent = f->descent;
+      height  = max (ascent + descent, f->height);
       width   = 0;
 
       bool scalable = face->face_flags & FT_FACE_FLAG_SCALABLE;
