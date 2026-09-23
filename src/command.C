@@ -1047,10 +1047,7 @@ rxvt_term::cursor_blink_reset ()
       want_refresh = 1;
     }
 
-  if (option (Opt_cursorBlink) || (priv_modes & PrivMode_BlinkingCursor))
-    cursor_blink_ev.again ();
-  else
-    cursor_blink_ev.stop ();
+  cursor_blink_ev.stop ();
 }
 
 void
@@ -1766,8 +1763,7 @@ rxvt_term::focus_in ()
         }
 #endif
 #if CURSOR_BLINK
-      if (option (Opt_cursorBlink))
-        cursor_blink_ev.again ();
+      cursor_blink_reset ();
 #endif
 #if OFF_FOCUS_FADING
       if (rs[Rs_fade])
@@ -4230,4 +4226,3 @@ void rxvt_term::pty_write ()
 }
 
 /*----------------------- end-of-file (C source) -----------------------*/
-
