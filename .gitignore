@@ -1,0 +1,15 @@
+*.o
+*.C
+*.man
+Makefile
+
+config.h
+config.log
+config.status
+
+src/rxvt
+src/rxvtc
+src/rxvtd
+
+src/perlxsi.c
+src/rclock
