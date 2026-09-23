@@ -100,8 +100,7 @@ install: all
 	$(INSTALL_DATA) rxvtd.1.man   $(DESTDIR)$(man1dir)/$(RXVTNAME)d.$(man1ext)
 	$(INSTALL_DATA) rxvt.7.man    $(DESTDIR)$(man7dir)/$(RXVTNAME).$(man7ext)
 	$(INSTALL_DATA) rclock.1.man  $(DESTDIR)$(man1dir)/urclock.$(man1ext)
-	@TIC@ -x $(srcdir)/etc/rxvt-unicode.terminfo || \
-           @TIC@ $(srcdir)/etc/rxvt-unicode.terminfo
+	# Terminfo installation is disabled as a workaround for FS#79143.
 
 distdepend: alldoc
 
