@@ -1307,12 +1307,12 @@ rxvt_font_xft::load (const rxvt_fontprop &prop, bool force_prop)
           XGlyphInfo g;
           XftTextExtents32 (disp, f, &ch, 1, &g);
 
-          g.width -= g.x;
-
+          // Use the glyph advance because its bounding box can include overhangs.
           int wcw = WCWIDTH (ch);
-          if (wcw > 0) g.width = (g.width + wcw - 1) / wcw;
+          int advance = g.xOff;
+          if (wcw > 1) advance /= wcw;
 
-          if (width    < g.width       ) width    = g.width;
+          if (width    < advance       ) width    = advance;
           if (height   < g.height      ) height   = g.height;
           if (glheight < g.height - g.y) glheight = g.height - g.y;
         }
@@ -1919,4 +1919,3 @@ found:
 
   return i;
 }
-
