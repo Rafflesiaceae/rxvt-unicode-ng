@@ -1081,6 +1081,12 @@ rxvt_term::init_xlocale ()
           return;
         }
 
+      // connecting to the input method (and creating the preedit font set
+      // for it) is by far the most expensive part of the startup, so allow
+      // skipping it altogether, including waiting for one to appear later
+      if (option (Opt_skipXIM))
+        return;
+
       im_ev.start (display);
 
       /* see if we can connect already */

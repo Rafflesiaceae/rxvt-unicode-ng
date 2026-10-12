@@ -68,4 +68,9 @@
  nodef(buffered)
 #endif
  def(dockapp)
+#if USE_XIM
+ def(skipXIM)    // do not set up the X input method
+#else
+ nodef(skipXIM)
+#endif
 

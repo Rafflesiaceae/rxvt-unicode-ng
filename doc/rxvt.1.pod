@@ -394,6 +394,11 @@ then additionally the C<OnTheSpot> preedit type is available.
 
 Compile I<XIM>: input method name. resource B<inputMethod>.
 
+=item B<-sxim>|B<+sxim>
+
+Compile I<XIM>: skip setting up the input method, which speeds up the
+startup considerably; resource B<skipXIM>.
+
 =item B<-imlocale> I<string>
 
 The locale to use for opening the IM. You can use an C<LC_CTYPE> of e.g.
@@ -1044,6 +1049,14 @@ B<OnTheSpot>, B<OverTheSpot>, B<OffTheSpot>, B<Root>; option B<-pt>.
 =item B<inputMethod:> I<name>
 
 I<name> of inputMethod to use; option B<-im>.
+
+=item B<skipXIM:> I<boolean>
+
+True: do not connect to any input method, which avoids its (often
+considerable) startup cost, e.g. for creating the preedit font set. Text
+can then only be entered via the plain keyboard mapping, i.e. without
+compose or dead keys and without input methods such as ibus. False:
+set up the input method as usual [default]; option B<-sxim>.
 
 =item B<imLocale:> I<name>
 

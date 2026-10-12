@@ -209,6 +209,7 @@ optList[] = {
               STRG (Rs_preeditType, "preeditType", "pt", "style", "input style: style = OverTheSpot|OffTheSpot|Root"),
               STRG (Rs_imLocale, "imLocale", "imlocale", "string", "locale to use for input method"),
               STRG (Rs_imFont, "imFont", "imfont", "fontname", "fontset for styles OverTheSpot and OffTheSpot"),
+              BOOL (Rs_skipXIM, "skipXIM", "sxim", Opt_skipXIM, 0, "skip setting up the input method"),
 #endif /* USE_XIM */
               STRG (Rs_name, NULL, "name", "string", "client instance, icon, and title strings"),
               STRG (Rs_title, "title", "title", "string", "title name for window"),

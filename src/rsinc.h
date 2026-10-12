@@ -54,6 +54,7 @@
 #if USE_XIM
   def (preeditType)
   def (inputMethod)
+  def (skipXIM)
 #endif
 #if XFT
   def (buffered)
