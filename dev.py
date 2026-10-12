@@ -280,8 +280,18 @@ def build_profile_binary(jobs=None):
     sync_profile_tree()
     cmd = ["meson", "setup", PROFILE_BUILD, PROFILE_SRC, *user_options()]
     if os.path.exists(os.path.join(PROFILE_BUILD, "build.ninja")):
-        cmd.insert(2, "--reconfigure")
-    run(cmd, stdout=subprocess.DEVNULL)
+        reconfigure = [*cmd[:2], "--reconfigure", *cmd[2:]]
+        print(f"+ {shlex.join(reconfigure)}", flush=True)
+        result = subprocess.run(reconfigure, cwd=ROOT, capture_output=True, text=True)
+        if result.returncode == 0:
+            cmd = None
+        else:
+            # Reconfiguring rejects options that were added to meson.options
+            # since the last setup, so start over with a fresh build.
+            print("Reconfiguring failed, setting up the profile build from scratch.")
+            shutil.rmtree(PROFILE_BUILD)
+    if cmd:
+        run(cmd, stdout=subprocess.DEVNULL)
     cmd = ["meson", "compile", "-C", PROFILE_BUILD]
     if jobs:
         cmd.append(f"-j{jobs}")
