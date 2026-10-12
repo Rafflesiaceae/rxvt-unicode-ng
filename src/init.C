@@ -659,6 +659,10 @@ rxvt_term::init_resources (int argc, const char *const *argv)
       HOOK_INVOKE ((this, HOOK_INIT, DT_END));
     }
 #endif
+#if ENABLE_LUA
+  if (rxvt_lua.init (this))
+    HOOK_INVOKE ((this, HOOK_INIT, DT_END));
+#endif
 
   // must be called after initialising the perl interpreter as it
   // may invoke the `on_register_command' hook

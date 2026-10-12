@@ -47,7 +47,7 @@ typedef  int32_t tlen_t_; // specifically for use in the line_t structure
 
 #include "feature.h"
 
-#if defined (ISO_14755) || defined (ENABLE_PERL)
+#if defined (ISO_14755) || defined (ENABLE_PERL) || defined (ENABLE_LUA)
 # define ENABLE_OVERLAY 1
 #endif
 
@@ -94,6 +94,10 @@ typedef  int32_t tlen_t_; // specifically for use in the line_t structure
 #include "ev_cpp.h"
 
 #include "rxvtperl.h"
+
+#if ENABLE_LUA
+#include "rxvtlua_neo.h"
+#endif
 
 // try to avoid some macros to decrease code size, on some systems
 #if ENABLE_MINIMAL
@@ -758,7 +762,7 @@ struct line_t
 
    void touch () // call whenever a line is changed/touched/updated
    {
-#if ENABLE_PERL
+#if ENABLE_PERL || ENABLE_LUA
      f &= ~LINE_FILTERED;
 #endif
    }
@@ -1101,6 +1105,9 @@ struct rxvt_term : zero_initialized, rxvt_vars, rxvt_screen
   getfd_callback *getfd_hook;           // convert remote to local fd, if != 0
 #if ENABLE_PERL
   rxvt_perl_term  perl;
+#endif
+#if ENABLE_LUA
+  rxvt_lua_term   lua;
 #endif
   struct mbstate  mbstate;              // current input multibyte state
 

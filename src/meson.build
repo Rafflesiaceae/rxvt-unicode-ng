@@ -1,7 +1,8 @@
 # Binaries of rxvt-unicode, a port of src/Makefile.in.
 #
 # The perl glue (rxvtperl.xs, urxvt.pm and the extensions in perl/) is left
-# out, the meson build does not support the embedded perl interpreter.
+# out, the meson build does not support the embedded perl interpreter. The
+# lua plugin system (rxvtlua_neo.C, example plugins in lua/) replaces it.
 
 # Objects shared between urxvt and the urxvtd daemon.
 common = static_library('rxvt-common',
@@ -23,6 +24,7 @@ common = static_library('rxvt-common',
   'keyboard.C',
   'rxvtimg.C',
   'ev_cpp.C',
+  'rxvtlua_neo.C',
   include_directories: config_inc,
   dependencies: base_deps + x_deps,
 )

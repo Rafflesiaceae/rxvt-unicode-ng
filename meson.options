@@ -9,6 +9,8 @@ option('pixbuf', type: 'feature', value: 'auto',
   description: 'gdk-pixbuf integration for background images')
 option('startup-notification', type: 'feature', value: 'auto',
   description: 'freedesktop startup notification support')
+option('lua', type: 'feature', value: 'auto',
+  description: 'embedded LuaJIT plugin system (~/.config/urxvt/plugins/*.lua)')
 
 # --- features --------------------------------------------------------------
 

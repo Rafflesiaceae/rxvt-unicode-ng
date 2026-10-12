@@ -73,6 +73,10 @@ struct rxvt_perl_interp
 
 extern struct rxvt_perl_interp rxvt_perl;
 
+#elif ENABLE_LUA
+
+#include "rxvtlua_neo.h"
+
 #else
 
 #define SHOULD_INVOKE(htype) false

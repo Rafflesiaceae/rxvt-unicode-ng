@@ -313,6 +313,16 @@ endif
 
 # The embedded perl interpreter is deliberately not supported by the meson
 # build, ENABLE_PERL is never defined. Use the autoconf build for perl.
+
+# --- lua -------------------------------------------------------------------
+
+# The LuaJIT plugin system takes the place of perl in the meson build (the
+# autoconf build never enables it).
+luajit_dep = dependency('luajit', required: get_option('lua'))
+if luajit_dep.found()
+  cdata.set('ENABLE_LUA', 1)
+  x_deps += luajit_dep
+endif
 if not get_option('resources')
   if get_option('frills')
     error('-Dresources=false requires -Dfrills=false')
@@ -403,6 +413,7 @@ summary({
 
 summary({
   'embedded perl': false,
+  'lua plugins': luajit_dep.found(),
   'image library': pixbuf_dep.found() ? 'gdk-pixbuf' : 'none',
   'xft': have_xft,
   'xim': have_xim,
