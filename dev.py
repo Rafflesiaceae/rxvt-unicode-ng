@@ -94,10 +94,18 @@ def cmd_run(args):
     ensure_configured()
     make(jobs=args.jobs)
     binary = path("src", "rxvt")
+
+    # The binary looks for urxvt.pm and the extensions below the configured
+    # LIBDIR, which only exists after an install. Point perl at the sources
+    # instead, so the in-tree build runs with its own perl code.
+    env = dict(os.environ)
+    for var, src in (("PERL5LIB", path("src")), ("URXVT_PERL_LIB", path("src", "perl"))):
+        env[var] = os.pathsep.join(filter(None, [src, env.get(var)]))
+
     print(f"+ {shlex.join([binary, *args.rxvt_args])}", flush=True)
     # Replace this process, so signals and the exit status pass straight
     # through to the terminal.
-    os.execv(binary, [binary, *args.rxvt_args])
+    os.execve(binary, [binary, *args.rxvt_args], env)
 
 
 def cmd_install(args):
