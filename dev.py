@@ -1,25 +1,29 @@
 #!/usr/bin/env python3
 # Development helper for building, running and installing rxvt-unicode.
 #
-# Wraps the autoconf based build (autogen.sh, configure, make), so the usual
-# steps are available as subcommands:
+# Wraps the meson build (in ./build), so the usual steps are available as
+# subcommands:
 #
-#   ./dev.py configure [--prefix DIR] [-- CONFIGURE_ARGS...]
+#   ./dev.py configure [--prefix DIR] [-- MESON_ARGS...]
 #   ./dev.py build [-j N]
 #   ./dev.py run [-- RXVT_ARGS...]
 #   ./dev.py install [--destdir DIR]
 #   ./dev.py clean [--dist]
 #
-# REQUIRES: python autoconf make pkg-config libptytty
+# REQUIRES: python meson ninja pkg-config libptytty
 import argparse
+import json
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 
 # Every path is resolved relative to the repository root, so the script works
 # no matter which directory it is invoked from.
 ROOT = os.path.dirname(os.path.realpath(__file__))
+
+BUILD_DIR = os.path.join(ROOT, "build")
 
 # Installing into the user's home avoids needing root for a development build.
 DEFAULT_PREFIX = os.path.expanduser("~/.local")
@@ -40,32 +44,17 @@ def run(cmd, **kwargs):
         raise SystemExit(error.returncode) from None
 
 
-def path(*parts):
-    return os.path.join(ROOT, *parts)
-
-
 def is_configured():
-    return os.path.exists(path("Makefile")) and os.path.exists(path("config.status"))
-
-
-def ensure_libev():
-    """Fail early with a hint when the vendored libev checkout is missing."""
-    if not os.path.exists(path("libev", "ev++.h")):
-        print(
-            "libev/ is missing, run './vendor.py' to fetch the vendored copy.",
-            file=sys.stderr,
-        )
-        raise SystemExit(1)
+    return os.path.exists(os.path.join(BUILD_DIR, "build.ninja"))
 
 
 def configure(prefix=DEFAULT_PREFIX, extra_args=()):
-    ensure_libev()
-    # `configure` is checked in, so it is only generated when missing. Going
-    # by mtimes would rewrite the tracked file after every fresh checkout, as
-    # git does not preserve them.
-    if not os.path.exists(path("configure")):
-        run(["./autogen.sh"])
-    run(["./configure", f"--prefix={prefix}", *extra_args])
+    cmd = ["meson", "setup", BUILD_DIR, f"--prefix={prefix}", *extra_args]
+    # Re-running setup on an existing build directory needs --reconfigure,
+    # which keeps all options that are not given again.
+    if is_configured():
+        cmd.insert(2, "--reconfigure")
+    run(cmd)
 
 
 def ensure_configured():
@@ -74,58 +63,64 @@ def ensure_configured():
         configure()
 
 
-def make(*targets, jobs=None):
-    cmd = ["make"]
+def compile_(jobs=None):
+    cmd = ["meson", "compile", "-C", BUILD_DIR]
     if jobs:
         cmd.append(f"-j{jobs}")
-    run(cmd + list(targets))
+    run(cmd)
+
+
+def build_option(name):
+    """Look up the value of a meson option of the configured build."""
+    intro = os.path.join(BUILD_DIR, "meson-info", "intro-buildoptions.json")
+    with open(intro) as f:
+        options = json.load(f)
+    return next(option["value"] for option in options if option["name"] == name)
 
 
 def cmd_configure(args):
-    configure(args.prefix, args.configure_args)
+    configure(args.prefix, args.meson_args)
 
 
 def cmd_build(args):
     ensure_configured()
-    make(jobs=args.jobs)
+    compile_(args.jobs)
 
 
 def cmd_run(args):
     ensure_configured()
-    make(jobs=args.jobs)
-    binary = path("src", "rxvt")
+    compile_(args.jobs)
 
-    # The binary looks for urxvt.pm and the extensions below the configured
-    # LIBDIR, which only exists after an install. Point perl at the sources
-    # instead, so the in-tree build runs with its own perl code.
-    env = dict(os.environ)
-    for var, src in (("PERL5LIB", path("src")), ("URXVT_PERL_LIB", path("src", "perl"))):
-        env[var] = os.pathsep.join(filter(None, [src, env.get(var)]))
-
+    # The binary is named after the 'name' option (urxvt by default).
+    binary = os.path.join(BUILD_DIR, "src", build_option("name"))
     print(f"+ {shlex.join([binary, *args.rxvt_args])}", flush=True)
     # Replace this process, so signals and the exit status pass straight
     # through to the terminal.
-    os.execve(binary, [binary, *args.rxvt_args], env)
+    os.execv(binary, [binary, *args.rxvt_args])
 
 
 def cmd_install(args):
     ensure_configured()
-    make(jobs=args.jobs)
-    targets = ["install"]
+    compile_(args.jobs)
+    cmd = ["meson", "install", "-C", BUILD_DIR, "--no-rebuild"]
     if args.destdir:
         # DESTDIR stages the install below a directory (e.g. for packaging)
         # while keeping the configured prefix in the installed files.
-        targets.append(f"DESTDIR={os.path.abspath(args.destdir)}")
-    make(*targets)
+        cmd.append(f"--destdir={os.path.abspath(args.destdir)}")
+    run(cmd)
 
 
 def cmd_clean(args):
     if not is_configured():
         print("Not configured, nothing to clean.")
         return
-    # distclean additionally drops the configure output, forcing a fresh
-    # configure on the next build.
-    make("distclean" if args.dist else "clean")
+    if args.dist:
+        # Dropping the build directory also drops the configured options,
+        # forcing a fresh configure on the next build.
+        print(f"+ rm -rf {shlex.quote(BUILD_DIR)}", flush=True)
+        shutil.rmtree(BUILD_DIR)
+    else:
+        run(["meson", "compile", "-C", BUILD_DIR, "--clean"])
 
 
 def main(argv=None):
@@ -140,20 +135,19 @@ def main(argv=None):
         "-j",
         "--jobs",
         type=int,
-        default=os.cpu_count(),
-        help="number of parallel make jobs (default: %(default)s)",
+        help="number of parallel build jobs (default: ninja's choice)",
     )
 
-    p = sub.add_parser("configure", help="(re)run ./configure")
+    p = sub.add_parser("configure", help="set up or reconfigure ./build")
     p.add_argument(
         "--prefix",
         default=DEFAULT_PREFIX,
         help="installation prefix (default: %(default)s)",
     )
     p.add_argument(
-        "configure_args",
+        "meson_args",
         nargs=argparse.REMAINDER,
-        help="extra arguments passed to ./configure, after '--'",
+        help="extra arguments passed to 'meson setup' (e.g. -Dxft=disabled), after '--'",
     )
     p.set_defaults(func=cmd_configure)
 
@@ -163,12 +157,12 @@ def main(argv=None):
     p.set_defaults(func=cmd_build)
 
     p = sub.add_parser(
-        "run", parents=[jobs_parser], help="build and run the in-tree src/rxvt"
+        "run", parents=[jobs_parser], help="build and run the freshly built urxvt"
     )
     p.add_argument(
         "rxvt_args",
         nargs=argparse.REMAINDER,
-        help="arguments passed to rxvt, after '--'",
+        help="arguments passed to urxvt, after '--'",
     )
     p.set_defaults(func=cmd_run)
 
@@ -182,14 +176,14 @@ def main(argv=None):
     p.add_argument(
         "--dist",
         action="store_true",
-        help="also remove the configure output (make distclean)",
+        help="remove the whole build directory, including its configuration",
     )
     p.set_defaults(func=cmd_clean)
 
     args = parser.parse_args(argv)
 
     # REMAINDER keeps the '--' separator, which neither tool expects.
-    for name in ("configure_args", "rxvt_args"):
+    for name in ("meson_args", "rxvt_args"):
         rest = getattr(args, name, None)
         if rest and rest[0] == "--":
             del rest[0]
