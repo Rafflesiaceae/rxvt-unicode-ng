@@ -394,7 +394,31 @@ rxvt_term::scr_reset ()
 #endif
         {
           // wing, instead of wrap
-          screen.cur.row += nrow - prev_nrow;
+          //
+          // The screen stays anchored to the bottom, so lines move into and
+          // out of the scrollback, but only lines that actually exist do.
+          // Growing beyond the scrollback adds the missing rows at the
+          // bottom, instead of shifting everything (and the cursor) down,
+          // and shrinking first drops the rows below the cursor, instead of
+          // pushing the lines above it into the scrollback. Otherwise a
+          // window resized right after startup (e.g. by a tiling window
+          // manager) would show the shell prompt in the middle of it.
+          int delta = nrow - prev_nrow;
+
+          if (delta > 0)
+            {
+              int pulled = min (delta, max (0, -top_row));
+              q -= delta - pulled;
+              delta = pulled;
+            }
+          else if (delta < 0)
+            {
+              int dropped = min (-delta, max (0, prev_nrow - 1 - screen.cur.row));
+              p = MOD (p - dropped, prev_total_rows);
+              delta += dropped;
+            }
+
+          screen.cur.row += delta;
 
           do
             {
