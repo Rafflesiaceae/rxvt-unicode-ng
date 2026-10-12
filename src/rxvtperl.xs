@@ -455,12 +455,20 @@ rxvt_perl_interp::init (rxvt_term *term)
 void
 rxvt_perl_interp::eval (const char *str)
 {
+  // perl is freed again when its initialisation fails, see init ()
+  if (!perl)
+    return;
+
   eval_pv (str, 1);
 }
 
 void
 rxvt_perl_interp::usage (rxvt_term *term, int type)
 {
+  // perl is freed again when its initialisation fails, see init ()
+  if (!perl)
+    return;
+
   localise_env set_environ (perl_environ);
 
   ENTER;
@@ -481,6 +489,10 @@ rxvt_perl_interp::usage (rxvt_term *term, int type)
 uint8_t
 rxvt_perl_interp::parse_resource (rxvt_term *term, const char *name, bool arg, bool longopt, bool flag, const char *value)
 {
+  // perl is freed again when its initialisation fails, see init ()
+  if (!perl)
+    return 0;
+
   localise_env set_environ (perl_environ);
 
   ENTER;
