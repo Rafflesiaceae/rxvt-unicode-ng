@@ -1,0 +1,81 @@
+# Build options, mirroring the --enable-*/--with-* switches of configure.ac.
+# The defaults match the ones of the autoconf build.
+
+# --- optional dependencies -------------------------------------------------
+
+option('xft', type: 'feature', value: 'auto',
+  description: 'Xft (anti-aliased) font support')
+option('pixbuf', type: 'feature', value: 'auto',
+  description: 'gdk-pixbuf integration for background images')
+option('startup-notification', type: 'feature', value: 'auto',
+  description: 'freedesktop startup notification support')
+
+# --- features --------------------------------------------------------------
+
+option('xim', type: 'boolean', value: true,
+  description: 'XIM (X Input Method) protocol support')
+option('frills', type: 'boolean', value: true,
+  description: 'support for rarely used features')
+option('transparency', type: 'boolean', value: true,
+  description: 'transparent backgrounds')
+option('fading', type: 'boolean', value: true,
+  description: 'colors fading when off focus')
+option('font-styles', type: 'boolean', value: true,
+  description: 'bold and italic support')
+option('unicode3', type: 'boolean', value: false,
+  description: 'use 21 instead of 16 bits to represent unicode characters')
+option('combining', type: 'boolean', value: true,
+  description: 'composition of base and combining characters')
+option('256-color', type: 'boolean', value: false,
+  description: '256-color support')
+option('iso14755', type: 'boolean', value: true,
+  description: 'extended ISO 14755 modes')
+option('8bitctrls', type: 'boolean', value: false,
+  description: '8 bit control sequences (not recommended)')
+option('rxvt-scroll', type: 'boolean', value: true,
+  description: 'rxvt style scrollbar')
+option('next-scroll', type: 'boolean', value: true,
+  description: 'NeXT style scrollbar')
+option('xterm-scroll', type: 'boolean', value: true,
+  description: 'xterm style scrollbar')
+option('keepscrolling', type: 'boolean', value: true,
+  description: 'continual scrolling on scrollbar arrow press')
+option('selectionscrolling', type: 'boolean', value: true,
+  description: 'scrolling during selections')
+option('mousewheel', type: 'boolean', value: true,
+  description: 'scrolling via mouse wheel or buttons 4 & 5')
+option('slipwheeling', type: 'boolean', value: true,
+  description: 'slip wheel scrolling (requires mousewheel)')
+option('smart-resize', type: 'boolean', value: false,
+  description: 'smart growth/shrink behaviour')
+option('text-blink', type: 'boolean', value: true,
+  description: 'blinking text')
+option('pointer-blank', type: 'boolean', value: true,
+  description: 'pointer blanking when typing or inactive')
+option('backspace-key', type: 'boolean', value: true,
+  description: 'handling of the backspace key')
+option('delete-key', type: 'boolean', value: true,
+  description: 'handling of the delete key')
+option('swapscreen', type: 'boolean', value: true,
+  description: 'swap (secondary) screen support')
+option('resources', type: 'boolean', value: true,
+  description: 'resource checking (disabling requires -Dfrills=false)')
+option('codesets', type: 'array',
+  choices: ['jp', 'jp_ext', 'kr', 'zh', 'zh_ext'],
+  value: ['jp', 'jp_ext', 'kr', 'zh', 'zh_ext'],
+  description: 'additional codesets to compile in ("eu" and "vn" are always included)')
+
+# --- names -----------------------------------------------------------------
+
+option('fallback', type: 'string', value: 'Rxvt',
+  description: 'fall back on resources of this class in addition to URxvt ones (empty to disable)')
+option('res-name', type: 'string', value: 'urxvt',
+  description: 'default resource name')
+option('res-class', type: 'string', value: 'URxvt',
+  description: 'resource class')
+option('name', type: 'string', value: 'urxvt',
+  description: 'basename for the installed binaries')
+option('term', type: 'string', value: '',
+  description: 'value of the TERM environment variable (default: rxvt-unicode or rxvt-unicode-256color)')
+option('terminfo', type: 'string', value: '',
+  description: 'value of the TERMINFO environment variable')
