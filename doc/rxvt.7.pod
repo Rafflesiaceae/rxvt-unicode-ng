@@ -2091,6 +2091,11 @@ arrives. Repeated begin markers during that interval do not extend it.
 The watchdog leaves the reported mode set; a later begin marker starts a
 new interval. A terminal reset clears the mode and cancels the watchdog.
 
+The C<synchronizedOutput> resource enables this protocol by default.
+When false, mode operations are ignored and DECRQM reports C<0>
+(unsupported). The C<frameBuffering> and C<refreshBatching> resources
+control frame presentation and heuristic batching independently.
+
 =back
 
 X<XTerm>

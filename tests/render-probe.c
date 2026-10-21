@@ -41,6 +41,16 @@ int XCopyArea (Display *d, Drawable source, Drawable target, GC gc,
   return real (d, source, target, gc, sx, sy, w, h, dx, dy);
 }
 
+Pixmap XCreatePixmap (Display *d, Drawable source,
+                       unsigned int w, unsigned int h, unsigned int depth)
+{
+  typeof (&XCreatePixmap) real = dlsym (RTLD_NEXT, "XCreatePixmap");
+  Pixmap pixmap = real (d, source, w, h, depth);
+  if (source == terminal)
+    record ("frame", source, pixmap);
+  return pixmap;
+}
+
 int XClearArea (Display *d, Window target, int x, int y,
                 unsigned int w, unsigned int h, Bool exposures)
 {

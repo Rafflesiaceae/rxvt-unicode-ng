@@ -3859,6 +3859,9 @@ rxvt_term::process_terminal_mode (int mode, int priv ecb_unused, unsigned int na
       for (j = 0; j < ecb_array_length (argtopriv); j++)
         if (argtopriv[j].argval == arg[0])
           {
+            // Advertise disabled synchronization as unavailable to clients.
+            if (arg[0] == 2026 && !option (Opt_synchronizedOutput))
+              break;
             status = (priv_modes & argtopriv[j].bit) ? 1 : 2;
             break;
           }
@@ -3876,6 +3879,10 @@ rxvt_term::process_terminal_mode (int mode, int priv ecb_unused, unsigned int na
   for (i = 0; i < nargs; i++)
     {
       state = -1;
+
+      // Ignore all mode operations, including save/restore, when opted out.
+      if (arg[i] == 2026 && !option (Opt_synchronizedOutput))
+        continue;
 
       /* basic handling */
       for (j = 0; j < ecb_array_length (argtopriv); j++)

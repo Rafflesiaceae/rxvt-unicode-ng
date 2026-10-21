@@ -599,6 +599,8 @@ rxvt_term::init_vars ()
   set_option (Opt_iso14755_52);
   set_option (Opt_buffered);
   set_option (Opt_refreshBatching);
+  set_option (Opt_frameBuffering);
+  set_option (Opt_synchronizedOutput);
 }
 
 #if ENABLE_PERL

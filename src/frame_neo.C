@@ -36,6 +36,10 @@ rxvt_term::scr_clear_rect (rxvt_drawable &d, int x, int y, int w, int h) noexcep
 void
 rxvt_term::scr_frame_resize () noexcept
 {
+  // The initial drawable remains the window when frame buffering is disabled.
+  if (!option (Opt_frameBuffering))
+    return;
+
   if (frame && frame_width == vt_width && frame_height == vt_height)
     return;
 
@@ -54,6 +58,13 @@ rxvt_term::scr_frame_resize () noexcept
 void
 rxvt_term::scr_present (int x, int y, int w, int h) noexcept
 {
+  if (!frame)
+    {
+      // Direct drawing has no retained pixels; redraw the exposed cells.
+      scr_expose (x, y, w, h, false);
+      return;
+    }
+
   // After a resize the old frame may be smaller than the exposed window.
   w = min (w, frame_width - x);
   h = min (h, frame_height - y);

@@ -6,6 +6,7 @@ Requires Xvfb, a C compiler and X11 development headers.
 """
 
 import ctypes
+import itertools
 import os
 from pathlib import Path
 import pty
@@ -39,7 +40,7 @@ class Terminal:
         self.process = subprocess.Popen(
             args, pass_fds=(self.master,), stdout=subprocess.DEVNULL,
             stderr=self.errors, env=dict(env, URXVT_RENDER_TRACE=str(self.trace)))
-        wait_until(lambda: self.presentations())
+        wait_until(lambda: self.visible_updates())
         self.send(b"\x1b[?25lready")
         time.sleep(0.08)
 
@@ -50,6 +51,10 @@ class Terminal:
 
     def presentations(self):
         return [e for e in self.events() if e[0] == "present"]
+
+    def visible_updates(self):
+        # Include direct drawing, where no completed-frame copy is issued.
+        return [e for e in self.events() if e[0] in ("present", "fill", "draw", "clear")]
 
     def send(self, data):
         os.write(self.slave, data)
@@ -208,6 +213,80 @@ def check_frame_rate(terminal):
     assert all(b - a >= 0.045 for a, b in zip(times, times[1:])), times
 
 
+def check_configuration(terminal, frame_buffering, synchronized):
+    assert bool([e for e in terminal.events() if e[0] == "frame"]) == frame_buffering
+    status = b"2" if synchronized else b"0"
+    terminal.query(b"\x1b[?2026$p", b"\x1b[?2026;" + status + b"$y")
+    before = len(terminal.visible_updates())
+    terminal.send(b"\x1b[?2026h\x1b[2J\x1b[Hconfiguration")
+    if synchronized:
+        terminal.query(b"\x1b[?2026$p", b"\x1b[?2026;1$y")
+        time.sleep(0.03)
+        assert len(terminal.visible_updates()) == before
+    else:
+        # An opt-out must disable actual holds, not just capability reporting.
+        wait_until(lambda: len(terminal.visible_updates()) > before, timeout=0.1)
+    terminal.send(b"\x1b[?2026l")
+    wait_until(lambda: len(terminal.visible_updates()) > before)
+    terminal.query(b"\x1b[?2026$p", b"\x1b[?2026;" + status + b"$y")
+    if not synchronized:
+        terminal.send(b"\x1b[?2026s\x1b[?2026h\x1b[?2026r\x1b[?2026t")
+        terminal.query(b"\x1b[?2026$p", b"\x1b[?2026;0$y")
+        before = len(terminal.visible_updates())
+        terminal.send(b"\rno hold")
+        wait_until(lambda: len(terminal.visible_updates()) > before, timeout=0.1)
+
+
+def check_direct_drawing(terminal, xlib, display):
+    window = next(e for e in terminal.events() if e[0] == "window")
+    parent, child = map(int, window[2:])
+    before = len(terminal.visible_updates())
+    terminal.send(b"\x1b[2J\x1b[Hdirect drawing")
+    wait_until(lambda: len(terminal.visible_updates()) > before)
+
+    # Without a retained frame, expose must invalidate cells and redraw them.
+    before = len(terminal.visible_updates())
+    xlib.XClearArea(display, child, 0, 0, 40, 20, True)
+    xlib.XSync(display, False)
+    wait_until(lambda: len(terminal.visible_updates()) > before)
+    before = len(terminal.visible_updates())
+    xlib.XResizeWindow(display, parent, 320, 180)
+    xlib.XSync(display, False)
+    wait_until(lambda: len(terminal.visible_updates()) > before)
+    time.sleep(0.03)
+
+    # An exposed region during a hold must wait for the end marker to redraw.
+    before = len(terminal.visible_updates())
+    terminal.send(b"\x1b[?2026h\x1b[2J\x1b[Hheld direct drawing")
+    terminal.query(b"\x1b[?2026$p", b"\x1b[?2026;1$y")
+    xlib.XClearArea(display, child, 0, 0, 40, 20, True)
+    xlib.XSync(display, False)
+    time.sleep(0.03)
+    assert len(terminal.visible_updates()) == before
+    terminal.send(b"\x1b[?2026l")
+    wait_until(lambda: len(terminal.visible_updates()) > before)
+
+    # The watchdog must also release direct drawing with no retained pixmap.
+    before = len(terminal.visible_updates())
+    terminal.send(b"\x1b[?2026hwatchdog")
+    wait_until(lambda: len(terminal.visible_updates()) > before, timeout=0.3)
+    terminal.send(b"\x1b[?2026l")
+    time.sleep(0.03)
+
+    xlib.XUnmapWindow(display, parent)
+    xlib.XSync(display, False)
+    time.sleep(0.03)
+    before = len(terminal.visible_updates())
+    terminal.send(b"\x1b[2J\x1b[Hhidden direct update")
+    terminal.query(b"\x1b[6n", b"R")
+    time.sleep(0.03)
+    assert len(terminal.visible_updates()) == before
+    xlib.XMapWindow(display, parent)
+    xlib.XSync(display, False)
+    wait_until(lambda: len(terminal.visible_updates()) > before)
+    assert not [e for e in terminal.events() if e[0] == "frame"]
+
+
 def main():
     binary = str(Path(sys.argv[1] if len(sys.argv) > 1 else "build/src/urxvt").resolve())
     with tempfile.TemporaryDirectory(prefix="urxvt-rendering-") as temporary:
@@ -277,6 +356,37 @@ def main():
                     finally:
                         terminal.close()
                     print("PASS: batching respects the configured frame rate")
+
+                    # Exercise all three startup switches independently.
+                    for frame, synchronized, batching in itertools.product((False, True), repeat=3):
+                        resources = tuple(f"URxvt.{name}: {str(value).lower()}" for name, value in (
+                            ("frameBuffering", frame), ("synchronizedOutput", synchronized),
+                            ("refreshBatching", batching)))
+                        terminal = Terminal(binary, directory, env, resources=resources)
+                        try:
+                            check_configuration(terminal, frame, synchronized)
+                        finally:
+                            terminal.close()
+                    print("PASS: all eight rendering configuration combinations")
+
+                    for font, buffered in (("fixed", True), ("xft:monospace:size=11", True),
+                                           ("xft:monospace:size=11", False)):
+                        resources = ("URxvt.frameBuffering: false",
+                                     f"URxvt.buffered: {str(buffered).lower()}")
+                        terminal = Terminal(binary, directory, env, font, resources)
+                        try:
+                            check_direct_drawing(terminal, xlib, display)
+                        finally:
+                            terminal.close()
+                    print("PASS: direct drawing, expose, resize, synchronization and Xft buffering")
+
+                    terminal = Terminal(binary, directory, env, "xft:monospace:size=11",
+                                        ("URxvt.buffered: false",))
+                    try:
+                        check_frames(terminal, xlib, display)
+                    finally:
+                        terminal.close()
+                    print("PASS: frame buffering is independent of Xft text buffering")
                 finally:
                     xlib.XCloseDisplay(display)
             finally:

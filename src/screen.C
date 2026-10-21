@@ -2534,7 +2534,8 @@ rxvt_term::scr_refresh () noexcept
   // Publish only after glyphs, decorations, cursor and refresh hooks finish.
   batch_pending = false;
   last_present = ev::now ();
-  scr_present (0, 0, frame_width, frame_height);
+  if (frame)
+    scr_present (0, 0, frame_width, frame_height);
 }
 
 void ecb_cold

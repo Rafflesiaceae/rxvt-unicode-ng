@@ -22,6 +22,8 @@
   def (jumpScroll)
   def (skipScroll)
   def (refreshBatching)
+  def (frameBuffering)
+  def (synchronizedOutput)
   def (scrollBar)
   def (scrollBar_right)
   def (scrollBar_floating)

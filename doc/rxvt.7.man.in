@@ -2315,6 +2315,11 @@ A watchdog releases presentation after 150 milliseconds if no end marker
 arrives. Repeated begin markers during that interval do not extend it.
 The watchdog leaves the reported mode set; a later begin marker starts a
 new interval. A terminal reset clears the mode and cancels the watchdog.
+.Sp
+The \f(CWsynchronizedOutput\fR resource enables this protocol by default.
+When false, mode operations are ignored and DECRQM reports \f(CW0\fR
+(unsupported). The \f(CWframeBuffering\fR and \f(CWrefreshBatching\fR resources
+control frame presentation and heuristic batching independently.
 .PD
 .PP
 

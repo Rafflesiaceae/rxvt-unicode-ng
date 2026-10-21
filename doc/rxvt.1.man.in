@@ -674,10 +674,32 @@ On some card/driver combination enabling it slightly decreases
 performance, on most it greatly helps it. The slowdown is small, so it
 should normally be enabled.
 .PP
-Terminal screen updates are also rendered into a retained pixmap and copied
-to the window after the complete refresh, including decorations and the
-cursor. Exposed areas are restored from the last completed frame. This
-frame buffering is independent of the Xft text buffering resource.
+This resource controls text buffering when \f(CWframeBuffering\fR is false.
+With frame buffering enabled, the complete frame already buffers Xft
+drawing, so an additional text buffer is unnecessary.
+.IP "\fBframeBuffering:\fR \fIboolean\fR" 4
+.IX Item "frameBuffering: boolean"
+When true (the default), render terminal screen updates into a retained
+pixmap and copy them to the window after the complete refresh, including
+decorations and the cursor. Restore exposed areas from the last completed
+frame. When false, draw directly into the window, avoiding the retained
+pixmap and whole-window presentation copies. The \f(CWbuffered\fR resource still
+controls Xft text buffering independently.
+.Sp
+This startup setting is independent of \f(CWsynchronizedOutput\fR and
+\f(CWrefreshBatching\fR. With frame buffering disabled, those features still
+group updates, but cannot prevent partially drawn refreshes or restore
+exposed areas until a pending update is presented.
+.IP "\fBsynchronizedOutput:\fR \fIboolean\fR" 4
+.IX Item "synchronizedOutput: boolean"
+When true (the default), allow applications to hold presentation while
+updating the logical screen using DEC private mode 2026. Presentation
+resumes at the end marker or after a 150 millisecond watchdog timeout.
+Enabling this startup setting does not hold output until an application
+requests synchronization.
+.Sp
+When false, ignore mode 2026 operations and report it as unsupported
+(\f(CW0\fR) through DECRQM, allowing applications to select their fallback.
 .IP "\fBgeometry:\fR \fIgeom\fR" 4
 .IX Item "geometry: geom"
 Create the window with the specified X window geometry [default 80x24];

@@ -612,10 +612,34 @@ On some card/driver combination enabling it slightly decreases
 performance, on most it greatly helps it. The slowdown is small, so it
 should normally be enabled.
 
-Terminal screen updates are also rendered into a retained pixmap and copied
-to the window after the complete refresh, including decorations and the
-cursor. Exposed areas are restored from the last completed frame. This
-frame buffering is independent of the Xft text buffering resource.
+This resource controls text buffering when C<frameBuffering> is false.
+With frame buffering enabled, the complete frame already buffers Xft
+drawing, so an additional text buffer is unnecessary.
+
+=item B<frameBuffering:> I<boolean>
+
+When true (the default), render terminal screen updates into a retained
+pixmap and copy them to the window after the complete refresh, including
+decorations and the cursor. Restore exposed areas from the last completed
+frame. When false, draw directly into the window, avoiding the retained
+pixmap and whole-window presentation copies. The C<buffered> resource still
+controls Xft text buffering independently.
+
+This startup setting is independent of C<synchronizedOutput> and
+C<refreshBatching>. With frame buffering disabled, those features still
+group updates, but cannot prevent partially drawn refreshes or restore
+exposed areas until a pending update is presented.
+
+=item B<synchronizedOutput:> I<boolean>
+
+When true (the default), allow applications to hold presentation while
+updating the logical screen using DEC private mode 2026. Presentation
+resumes at the end marker or after a 150 millisecond watchdog timeout.
+Enabling this startup setting does not hold output until an application
+requests synchronization.
+
+When false, ignore mode 2026 operations and report it as unsupported
+(C<0>) through DECRQM, allowing applications to select their fallback.
 
 =item B<geometry:> I<geom>
 

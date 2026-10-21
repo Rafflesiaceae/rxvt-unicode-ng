@@ -18,6 +18,8 @@
  def(jumpScroll)
  def(skipScroll)
  def(refreshBatching)
+ def(frameBuffering)
+ def(synchronizedOutput)
  def(mouseWheelScrollPage)
 #if POINTER_BLANK
  def(pointerBlank)
