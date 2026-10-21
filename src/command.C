@@ -709,6 +709,14 @@ rxvt_term::key_press (XKeyEvent &ev)
         return;
 #endif
 
+      // Plugins and keysym resources can override prompt navigation.
+      if (current_screen == PRIMARY && ctrl && !shft && !meta
+          && (keysym == XK_Prior || keysym == XK_Next))
+        {
+          scr_prompt_jump (keysym == XK_Prior ? -1 : 1);
+          return;
+        }
+
       if (saveLines)
         {
 #ifdef UNSHIFTED_SCROLLKEYS
@@ -4157,6 +4165,10 @@ rxvt_term::tt_write_user_input (const char *data, unsigned int len)
 {
   if (HOOK_INVOKE ((this, HOOK_TT_WRITE, DT_STR_LEN, data, len, DT_END)))
     return;
+
+  // Detect submissions only after plugins have accepted the input.
+  if (len == 1 && data[0] == '\r')
+    scr_mark_prompt ();
 
   if (option (Opt_scrollTtyKeypress))
     scr_changeview (0);

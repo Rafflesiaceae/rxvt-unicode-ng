@@ -1435,6 +1435,19 @@ Scroll down with B<Button1> (B<xterm-scrollbar>) or B<Shift-Next>.
 Scroll up with B<Button3> (B<xterm-scrollbar>) or B<Shift-Prior>.
 Continuous scroll with B<Button2>.
 
+B<Ctrl-Prior> (Ctrl+PageUp) jumps to the previous shell prompt marker.
+B<Ctrl-Next> (Ctrl+PageDown) jumps to the next marker, or returns to the
+live screen if there are no newer markers. These shortcuts apply on the
+primary screen and can be overridden by keysym resources or plugins.
+
+Markers are recorded when Return submits a nonempty command after a
+conventional prompt ending in C<$ >, C<# >, C<% > or C<E<gt> >. This is a
+text heuristic, so custom prompts may need explicit marking by a Lua
+plugin. Empty commands and the alternate screen are ignored. Consecutive
+commands with no intervening output share the latest marker. Markers
+follow their lines through scrolling and resizing and disappear when
+their lines are cleared or leave the scrollback.
+
 =head1 MOUSE REPORTING
 
 To temporarily override mouse reporting, for either the scrollbar or

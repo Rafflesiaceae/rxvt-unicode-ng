@@ -416,6 +416,58 @@ t_view_start (lua_State *L)
   return 1;
 }
 
+// t:prompt_marker (row [, marked]) -> whether this row is marked.
+// Explicit marking lets plugins support prompts the heuristic cannot see.
+static int
+t_prompt_marker (lua_State *L)
+{
+  rxvt_term *term = check_term (L);
+  line_t &line = check_row (L, term, 2);
+
+  if (!lua_isnoneornil (L, 3))
+    {
+      luaL_checktype (L, 3, LUA_TBOOLEAN);
+      if (lua_toboolean (L, 3))
+        line.f |= LINE_PROMPT;
+      else
+        line.f &= ~LINE_PROMPT;
+    }
+
+  lua_pushboolean (L, line.valid () && (line.f & LINE_PROMPT));
+  return 1;
+}
+
+// t:prompt_markers () -> marked rows in order, oldest first.
+static int
+t_prompt_markers (lua_State *L)
+{
+  rxvt_term *term = check_term (L);
+  lua_newtable (L);
+  int index = 0;
+
+  for (int row = term->top_row; row < term->nrow; row++)
+    {
+      line_t &line = ROW_of (term, row);
+      if (line.valid () && (line.f & LINE_PROMPT))
+        {
+          lua_pushinteger (L, row);
+          lua_rawseti (L, -2, ++index);
+        }
+    }
+
+  return 1;
+}
+
+// t:prompt_jump (direction) -> view_start after navigating.
+static int
+t_prompt_jump (lua_State *L)
+{
+  rxvt_term *term = check_term (L);
+  term->scr_prompt_jump (luaL_checkinteger (L, 2));
+  lua_pushinteger (L, term->view_start);
+  return 1;
+}
+
 // t:cursor () -> row, col
 static int
 t_cursor (lua_State *L)
@@ -700,6 +752,9 @@ static const luaL_Reg term_methods[] = {
   { "ncol",          t_ncol          },
   { "top_row",       t_top_row       },
   { "view_start",    t_view_start    },
+  { "prompt_marker", t_prompt_marker },
+  { "prompt_markers", t_prompt_markers },
+  { "prompt_jump",   t_prompt_jump   },
   { "cursor",        t_cursor        },
   { "focus",         t_focus         },
   { "font_size",     t_font_size     },

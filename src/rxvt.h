@@ -721,6 +721,7 @@ typedef callback<int (int)> getfd_callback;
 #define LINE_COMPRESSED 0x0004 // line has been compressed (NYI)
 #define LINE_FILTER     0x0008 // line needs to be filtered before display (NYI)
 #define LINE_BIDI       0x0010 // line needs bidi (NYI)
+#define LINE_PROMPT     0x0020 // submitted shell command, independent of rendition
 
 struct line_t
 {
@@ -1529,6 +1530,8 @@ struct rxvt_term : zero_initialized, rxvt_vars, rxvt_screen
     return scr_page (direction * nlines);
   }
   bool scr_changeview (int new_view_start) noexcept;
+  void scr_mark_prompt () noexcept;
+  bool scr_prompt_jump (int direction) noexcept;
   void scr_bell () noexcept;
   void scr_printscreen (int fullhist) noexcept;
   void scr_xor_rect (int beg_row, int beg_col, int end_row, int end_col, rend_t rstyle1, rend_t rstyle2) noexcept;

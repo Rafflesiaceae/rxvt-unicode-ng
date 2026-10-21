@@ -123,6 +123,9 @@ arguments are listed after `t`. X events (`ev`) are tables with `type`,
 | `t:nrow ()`, `t:ncol ()` | screen size in characters |
 | `t:top_row ()` | row of the oldest scrollback line |
 | `t:view_start ([row])` | first row in the window, scrolls there first if `row` is given |
+| `t:prompt_marker (row [, marked])` | whether a row has a prompt marker; pass a boolean to set or clear it |
+| `t:prompt_markers ()` | table of marked row numbers, oldest first, including visible rows |
+| `t:prompt_jump (direction)` | jumps to the previous marker for negative directions, the next for positive directions, or does nothing for zero; returns `view_start`. After the newest marker it returns to the live screen. Navigation does nothing on the alternate screen. |
 | `t:cursor ()` | cursor `row, col` |
 | `t:focus ()` | whether the window has the focus |
 | `t:font_size ()` | `width, height` of a character cell in pixels |
@@ -140,6 +143,26 @@ arguments are listed after `t`. X events (`ev`) are tables with `type`,
 | `t:selection ([clipboard])` | the PRIMARY (or CLIPBOARD) selection text, or nil |
 | `t:set_selection (text [, clipboard])` | sets and claims the selection |
 | `t:resource (name)` | the X resource `URxvt.<name>`, or nil |
+
+Prompt markers are detected on Return after nonempty commands with conventional
+`$ `, `# `, `% ` or `> ` prompts. Ctrl+PageUp and Ctrl+PageDown navigate them.
+Markers follow their lines through scrollback and resizing; fully clearing a
+line removes its marker. Commands without intervening output share the latest
+marker. Detection skips the alternate screen. Plugins can mark other prompt
+formats explicitly, for example from `on_osc_seq`, and use the same navigation:
+
+```lua
+-- Add alternative shortcuts for the built-in prompt navigation.
+urxvt.bind ("M-Up", function (t) t:prompt_jump (-1) end)
+urxvt.bind ("M-Down", function (t) t:prompt_jump (1) end)
+```
+
+Inside a hook, `t:prompt_marker ((t:cursor ()), true)` marks the cursor row.
+
+The marker methods use the same row coordinates as `t:line`. Stored row numbers
+can change or expire when output scrolls or the terminal resizes, so query them
+again when needed. Markers are separate from cell renditions, so highlighting
+and styling plugins do not overwrite them.
 
 ## The urxvt module
 

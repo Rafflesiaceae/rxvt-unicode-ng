@@ -108,6 +108,10 @@ rxvt_term::scr_blank_line (line_t &l, unsigned int col, unsigned int width, rend
 
   l.touch ();
 
+  // A fully erased or recycled row must not retain a prompt marker.
+  if (col == 0 && width == ncol)
+    l.f &= ~LINE_PROMPT;
+
   efs &= ~RS_baseattrMask; // remove italic etc. fontstyles
   efs = SET_FONT (efs, FONTSET (efs)->find_space_font ());
 
@@ -351,6 +355,10 @@ rxvt_term::scr_reset ()
                   qline->l = ncol;
                   qline->is_longer (1);
 
+                  // Empty logical lines have no cells to copy below.
+                  if (qrow == q)
+                    qline->f |= prev_row_buf [p].f & LINE_PROMPT;
+
                   int qcol = 0;
 
                   // see below for cursor adjustment rationale
@@ -374,6 +382,11 @@ rxvt_term::scr_reset ()
 
                       line_t &pline = prev_row_buf [prow];
 
+                      // Transfer each marked source row only once, even
+                      // when its cells span several destination rows.
+                      if (pcol == 0)
+                        qline->f |= pline.f & LINE_PROMPT;
+
                       int len = min (min (prev_ncol - pcol, ncol - qcol), llen - lofs);
 
                       memcpy (qline->t + qcol, pline.t + pcol, len * sizeof (text_t));
@@ -386,7 +399,9 @@ rxvt_term::scr_reset ()
 
               qline->l = llen ? MOD (llen - 1, ncol) + 1 : 0;
               qline->is_longer (0);
+              uint32_t prompt = qline->f & LINE_PROMPT;
               scr_blank_line (*qline, qline->l, ncol - qline->l, DEFAULT_RSTYLE);
+              qline->f |= prompt;
             }
           while (p != pend && q > 0);
         }
