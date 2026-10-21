@@ -105,6 +105,7 @@ arguments are listed after `t`. X events (`ev`) are tables with `type`,
 | `on_line_update` | row | a changed logical line (starting at row, possibly wrapped) is about to be shown, the place for `t:rend` |
 | `on_refresh_begin` / `on_refresh_end` | | around every redraw, `t:highlight` works in `on_refresh_begin` |
 | `on_view_change` | view_start | the view was scrolled |
+| `on_screen_change` | screen | after switching screens: 0 for primary, 1 for alternate; also fires when a hard reset returns to primary. Repeated requests for the same screen do not fire it. This is a notification and cannot cancel the switch. |
 | `on_scroll_back` | lines, top_row | lines were moved into the scrollback |
 | `on_add_lines` | text | text output by the program, return true to drop it |
 | `on_tt_write` | data | data sent to the program, return true to drop it |
@@ -123,6 +124,7 @@ arguments are listed after `t`. X events (`ev`) are tables with `type`,
 | `t:nrow ()`, `t:ncol ()` | screen size in characters |
 | `t:top_row ()` | row of the oldest scrollback line |
 | `t:view_start ([row])` | first row in the window, scrolls there first if `row` is given |
+| `t:current_screen ()` | 0 for the primary screen, 1 for the alternate screen; reads urxvt's existing state directly, without polling or system calls |
 | `t:prompt_marker (row [, marked])` | whether a row has a prompt marker; pass a boolean to set or clear it |
 | `t:prompt_markers ()` | table of marked row numbers, oldest first, including visible rows |
 | `t:prompt_jump (direction)` | jumps to the previous marker for negative directions, the next for positive directions, or does nothing for zero; returns `view_start`. After the newest marker it returns to the live screen. Navigation does nothing on the alternate screen. |
@@ -143,6 +145,35 @@ arguments are listed after `t`. X events (`ev`) are tables with `type`,
 | `t:selection ([clipboard])` | the PRIMARY (or CLIPBOARD) selection text, or nil |
 | `t:set_selection (text [, clipboard])` | sets and claims the selection |
 | `t:resource (name)` | the X resource `URxvt.<name>`, or nil |
+
+### Detecting alternate-screen applications
+
+For a shortcut that should only run on the primary screen, query the screen
+when the key is pressed:
+
+```lua
+local urxvt = require "urxvt"
+
+urxvt.bind ("C-S-K", function (t)
+  -- Leave the key to the application while the alternate screen is active.
+  if t:current_screen () == 1 then return false end
+  t:prompt_jump (-1)
+end)
+```
+
+Plugins that need to react as soon as the screen changes can implement
+`on_screen_change (t, screen)` instead. No timer, process inspection, or shell
+integration is needed. The hook runs after urxvt has updated its screen state,
+so `t:current_screen ()` already returns the new value.
+
+This reliably reports primary versus alternate screen, not whether an arbitrary
+program is a fullscreen TUI. Applications can draw a TUI on the primary screen,
+and multiplexers such as tmux can keep the outer terminal on the alternate
+screen even when an inner pane shows a shell prompt. Disabling secondary-screen
+storage does not change the reported mode; the value follows urxvt's screen
+mode requests.
+
+### Prompt markers
 
 Prompt markers are detected on Return after nonempty commands with conventional
 `$ `, `# `, `% ` or `> ` prompts. Ctrl+PageUp and Ctrl+PageDown navigate them.

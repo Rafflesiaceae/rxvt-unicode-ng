@@ -416,6 +416,15 @@ t_view_start (lua_State *L)
   return 1;
 }
 
+// t:current_screen () -> 0 for the primary screen, 1 for the alternate.
+// Read the parser's state directly; no PTY queries or output heuristics.
+static int
+t_current_screen (lua_State *L)
+{
+  lua_pushinteger (L, check_term (L)->current_screen);
+  return 1;
+}
+
 // t:prompt_marker (row [, marked]) -> whether this row is marked.
 // Explicit marking lets plugins support prompts the heuristic cannot see.
 static int
@@ -752,6 +761,7 @@ static const luaL_Reg term_methods[] = {
   { "ncol",          t_ncol          },
   { "top_row",       t_top_row       },
   { "view_start",    t_view_start    },
+  { "current_screen", t_current_screen },
   { "prompt_marker", t_prompt_marker },
   { "prompt_markers", t_prompt_markers },
   { "prompt_jump",   t_prompt_jump   },

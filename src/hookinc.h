@@ -60,3 +60,5 @@
 
   def (TT_PASTE)
 
+  def (SCREEN_CHANGE)
+

@@ -218,6 +218,8 @@ rxvt_term::copy_line (line_t &dst, line_t &src)
 void ecb_cold
 rxvt_term::scr_reset ()
 {
+  int old_screen = current_screen;
+
 #if ENABLE_OVERLAY
   scr_overlay_off ();
 #endif
@@ -479,6 +481,10 @@ rxvt_term::scr_reset ()
 
   tt_winch ();
 
+  // A hard reset rebuilds the primary screen without scr_change_screen.
+  if (old_screen != current_screen && SHOULD_INVOKE (HOOK_SCREEN_CHANGE))
+    HOOK_INVOKE ((this, HOOK_SCREEN_CHANGE, DT_INT, current_screen, DT_END));
+
   HOOK_INVOKE ((this, HOOK_RESET, DT_END));
 }
 
@@ -631,6 +637,10 @@ rxvt_term::scr_change_screen (int scrn)
 #endif
     if (option (Opt_secondaryScroll))
       scr_scroll_text (0, prev_nrow - 1, prev_nrow);
+
+  // Notify after the switch is complete; handlers cannot cancel it.
+  if (SHOULD_INVOKE (HOOK_SCREEN_CHANGE))
+    HOOK_INVOKE ((this, HOOK_SCREEN_CHANGE, DT_INT, current_screen, DT_END));
 }
 
 // clear WrapNext indicator, solidifying position on next line
