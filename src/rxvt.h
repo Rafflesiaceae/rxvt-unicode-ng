@@ -1479,6 +1479,12 @@ struct rxvt_term : zero_initialized, rxvt_vars, rxvt_screen
   void scr_reset ();
   void scr_release () noexcept;
   void scr_clear (bool really = false) noexcept;
+  // Retain the last completed frame for presentation and expose events.
+  Pixmap frame;
+  int frame_width, frame_height;
+  void scr_frame_resize () noexcept;
+  void scr_present (int x, int y, int width, int height) noexcept;
+  void scr_clear_rect (rxvt_drawable &d, int x, int y, int width, int height) noexcept;
   void scr_refresh () noexcept;
   bool scr_refresh_rend (rend_t mask, rend_t value) noexcept;
   void scr_erase_screen (int mode) noexcept;

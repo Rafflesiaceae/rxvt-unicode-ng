@@ -87,9 +87,8 @@ fill_text (text_t *start, text_t value, int len)
  */
 #define CLEAR_CHARS(x, y, num)                                         \
     if (mapped)                                                        \
-        XClearArea (dpy, vt, x, y,                                     \
-                    (unsigned int)Width2Pixel (num),                   \
-                    (unsigned int)Height2Pixel (1), False)
+        scr_clear_rect (*drawable, x, y, Width2Pixel (num),            \
+                        Height2Pixel (1))
 
 /* ------------------------------------------------------------------------- *
  *                        SCREEN `COMMON' ROUTINES                           *
@@ -1385,8 +1384,6 @@ rxvt_term::scr_erase_screen (int mode) noexcept
 {
   int num;
   int32_t row;
-  rend_t ren;
-  XGCValues gcvalue;
 
   want_refresh = 1;
   ZERO_SCROLLBACK ();
@@ -1422,41 +1419,10 @@ rxvt_term::scr_erase_screen (int mode) noexcept
 
   min_it (num, nrow - row);
 
-  if (rstyle & (RS_Blink | RS_RVid | RS_Uline))
-    ren = (rend_t) ~RS_None;
-  else if (GET_BASEBG (rstyle) == Color_bg)
-    {
-      ren = DEFAULT_RSTYLE;
-
-      if (mapped)
-        XClearArea (dpy, vt, 0,
-                    Row2Pixel (row - view_start), (unsigned int)vt_width,
-                    (unsigned int)Height2Pixel (num), False);
-    }
-  else
-    {
-      ren = rstyle & (RS_fgMask | RS_bgMask);
-
-      if (mapped)
-        {
-          gcvalue.foreground = pix_colors[bgcolor_of (rstyle)];
-          XChangeGC (dpy, gc, GCForeground, &gcvalue);
-          XFillRectangle (dpy, vt, gc,
-                          0, Row2Pixel (row - view_start),
-                          (unsigned int)vt_width,
-                          (unsigned int)Height2Pixel (num));
-          gcvalue.foreground = pix_colors[Color_fg];
-          XChangeGC (dpy, gc, GCForeground, &gcvalue);
-        }
-    }
-
+  // Preserve the presented frame and drawing cache until the next refresh.
+  num_scr_allow = 0;
   for (; num--; row++)
-    {
-      scr_blank_screen_mem (ROW(row), rstyle);
-
-      if (row - view_start < nrow)
-        scr_blank_line (drawn_buf [row - view_start], 0, ncol, ren);
-    }
+    scr_blank_screen_mem (ROW(row), rstyle);
 }
 
 #if !ENABLE_MINIMAL
@@ -2109,6 +2075,8 @@ rxvt_term::scr_refresh () noexcept
   if (refresh_type == NO_REFRESH || !mapped)
     return;
 
+  scr_frame_resize ();
+
   /*
    * A: set up vars
    */
@@ -2265,7 +2233,7 @@ rxvt_term::scr_refresh () noexcept
               XGCValues gcv;
 
               gcv.graphics_exposures = 1; XChangeGC (dpy, gc, GCGraphicsExposures, &gcv);
-              XCopyArea (dpy, vt, vt,
+              XCopyArea (dpy, *drawable, *drawable,
                          gc, 0, Row2Pixel (len + i),
                          (unsigned int)this->width,
                          (unsigned int)Height2Pixel (wlen - len + 1),
@@ -2489,7 +2457,7 @@ rxvt_term::scr_refresh () noexcept
 #endif
                 XSetForeground (dpy, gc, pix_colors[fore]);
 
-              XDrawLine (dpy, vt, gc,
+              XDrawLine (dpy, *drawable, gc,
                          xpixel, ypixel + font->ascent + 1,
                          xpixel + Width2Pixel (count) - 1, ypixel + font->ascent + 1);
             }
@@ -2509,13 +2477,13 @@ rxvt_term::scr_refresh () noexcept
             {
               XSetForeground (dpy, gc, pix_colors[ccol1]);
               if (cursor_type == 1)
-                XFillRectangle (dpy, vt, gc,
+                XFillRectangle (dpy, *drawable, gc,
                                 Col2Pixel (cur_col),
                                 Row2Pixel (oldcursor.row + 1) - 2,
                                 Width2Pixel (1),
                                 2);
               else
-                XFillRectangle (dpy, vt, gc,
+                XFillRectangle (dpy, *drawable, gc,
                                 Col2Pixel (cur_col),
                                 Row2Pixel (oldcursor.row),
                                 2,
@@ -2526,7 +2494,7 @@ rxvt_term::scr_refresh () noexcept
         {
           XSetForeground (dpy, gc, pix_colors[ccol1]);
 
-          XDrawRectangle (dpy, vt, gc,
+          XDrawRectangle (dpy, *drawable, gc,
                           Col2Pixel (cur_col),
                           Row2Pixel (oldcursor.row),
                           (unsigned int) (Width2Pixel (cursorwidth) - 1),
@@ -2547,6 +2515,9 @@ rxvt_term::scr_refresh () noexcept
   screen.flags = old_screen_flags;
   num_scr = 0;
   num_scr_allow = 1;
+
+  // Publish only after glyphs, decorations, cursor and refresh hooks finish.
+  scr_present (0, 0, frame_width, frame_height);
 }
 
 void ecb_cold
@@ -2635,7 +2606,7 @@ rxvt_term::scr_clear (bool really) noexcept
   want_refresh = 1;
 
   if (really)
-    XClearWindow (dpy, vt);
+    scr_touch (false);
 }
 
 void

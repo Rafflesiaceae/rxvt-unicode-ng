@@ -236,7 +236,7 @@ rxvt_font::clear_rect (rxvt_drawable &d, int x, int y, int w, int h, int color) 
   dTermGC;
 
   if (color == Color_bg || color == Color_transparent)
-    XClearArea (disp, d, x, y, w, h, false);
+    term->scr_clear_rect (d, x, y, w, h);
   else if (color >= 0)
     {
 #if XFT
@@ -247,7 +247,7 @@ rxvt_font::clear_rect (rxvt_drawable &d, int x, int y, int w, int h, int color) 
           && !term->pix_colors[color].is_opaque ()
           && ((dst = XftDrawPicture (d))))
         {
-          XClearArea (disp, d, x, y, w, h, false);
+          term->scr_clear_rect (d, x, y, w, h);
 
           Picture solid_color_pict = XftDrawSrcPicture (d, &term->pix_colors[color].c);
           XRenderComposite (disp, PictOpOver, solid_color_pict, None, dst, 0, 0, 0, 0, x, y, w, h);
@@ -1438,8 +1438,10 @@ rxvt_font_xft::draw (rxvt_drawable &d, int x, int y,
   int w = term->fwidth * len;
   int h = term->fheight;
 
+  // The retained terminal frame already buffers background and glyph drawing.
   bool buffered = bg >= Color_transparent
-                  && term->option (Opt_buffered);
+                  && term->option (Opt_buffered)
+                  && d.drawable != term->frame;
 
   // cut trailing spaces
   while (len && text [len - 1] == ' ')

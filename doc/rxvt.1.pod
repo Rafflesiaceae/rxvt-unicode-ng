@@ -612,6 +612,11 @@ On some card/driver combination enabling it slightly decreases
 performance, on most it greatly helps it. The slowdown is small, so it
 should normally be enabled.
 
+Terminal screen updates are also rendered into a retained pixmap and copied
+to the window after the complete refresh, including decorations and the
+cursor. Exposed areas are restored from the last completed frame. This
+frame buffering is independent of the Xft text buffering resource.
+
 =item B<geometry:> I<geom>
 
 Create the window with the specified X window geometry [default 80x24];

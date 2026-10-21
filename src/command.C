@@ -1572,8 +1572,8 @@ rxvt_term::x_cb (XEvent &ev)
           {
             do
               {
-                scr_expose (ev.xexpose.x, ev.xexpose.y,
-                            ev.xexpose.width, ev.xexpose.height, false);
+                scr_present (ev.xexpose.x, ev.xexpose.y,
+                             ev.xexpose.width, ev.xexpose.height);
               }
             while (XCheckTypedWindowEvent (dpy, vt, ev.xany.type, &ev));
 
@@ -1581,11 +1581,12 @@ rxvt_term::x_cb (XEvent &ev)
 
             while (XCheckTypedWindowEvent (dpy, vt, ev.xany.type, &ev))
               {
-                scr_expose (ev.xexpose.x, ev.xexpose.y,
-                            ev.xexpose.width, ev.xexpose.height, false);
+                scr_present (ev.xexpose.x, ev.xexpose.y,
+                             ev.xexpose.width, ev.xexpose.height);
               }
 
-            want_refresh = 1;
+            if (!frame)
+              want_refresh = 1;
           }
         else
           {

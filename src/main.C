@@ -243,6 +243,8 @@ rxvt_term::~rxvt_term ()
         XFreeGC (dpy, gc);
 
       delete drawable;
+      if (frame)
+        XFreePixmap (dpy, frame);
 
       // destroy all windows
       if (parent)
