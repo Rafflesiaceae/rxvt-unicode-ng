@@ -2303,6 +2303,18 @@ l l .
 h	Enable bracketed paste mode - prepend / append to the pasted text the control sequences ESC [ 200 ~ / ESC [ 201 ~
 l	Disable bracketed paste mode
 .TE
+.ie n .IP "\fB\f(CB""Pm = 2026""\fB\fR (Synchronized output)" 4
+.el .IP "\fB\f(CBPm = 2026\fB\fR (Synchronized output)" 4
+.IX Item "Pm = 2026 (Synchronized output)"
+\&\f(CW\*(C`ESC [ ? 2026 h\*(C'\fR holds the last completed frame while incoming output
+continues to update the logical screen. \f(CW\*(C`ESC [ ? 2026 l\*(C'\fR presents the
+completed update. \f(CW\*(C`ESC [ ? 2026 $ p\*(C'\fR reports \f(CW1\fR while the mode is set
+and \f(CW2\fR while reset.
+.Sp
+A watchdog releases presentation after 150 milliseconds if no end marker
+arrives. Repeated begin markers during that interval do not extend it.
+The watchdog leaves the reported mode set; a later begin marker starts a
+new interval. A terminal reset clears the mode and cancels the watchdog.
 .PD
 .PP
 

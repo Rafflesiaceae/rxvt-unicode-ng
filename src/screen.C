@@ -520,6 +520,9 @@ void ecb_cold
 rxvt_term::scr_soft_reset () noexcept
 {
   /* only affects modes, nothing drastic such as clearing the screen */
+  sync_ev.stop ();
+  priv_modes &= ~PrivMode_SyncOutput;
+  SavedModes &= ~PrivMode_SyncOutput;
 #if ENABLE_OVERLAY
   scr_overlay_off ();
 #endif
@@ -2061,6 +2064,13 @@ rxvt_term::scr_printscreen (int fullhist) noexcept
 void ecb_hot
 rxvt_term::scr_refresh () noexcept
 {
+  // Also guard parser-driven refreshes and refresh requests from extensions.
+  if (sync_ev.is_active ())
+    {
+      want_refresh = 1;
+      return;
+    }
+
   int16_t col, row,   /* column/row we're processing               */
           ocrow;      /* old cursor row                            */
   int i;              /* tmp                                       */

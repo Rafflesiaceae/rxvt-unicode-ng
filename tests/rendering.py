@@ -99,6 +99,52 @@ def check_frames(terminal, xlib, display):
     terminal.query(b"\x1b[6n", b"R")
 
 
+def check_synchronized(terminal, xlib, display):
+    terminal.query(b"\x1b[?2026$p", b"\x1b[?2026;2$y")
+    before = len(terminal.presentations())
+    # Fragment both the mode sequence and the following repaint across reads.
+    terminal.send(b"\x1b[?20")
+    time.sleep(0.01)
+    terminal.send(b"26h\x1b[2J\x1b[Hpartial")
+    terminal.query(b"\x1b[?2026$p", b"\x1b[?2026;1$y")
+    time.sleep(0.04)
+    assert len(terminal.presentations()) == before
+    # Reverse video forces a direct parser refresh; it must also be held.
+    terminal.send(b"\x1b[?5h\r\n" + b"line\r\n" * 40)
+    terminal.query(b"\x1b[6n", b"R")
+    assert len(terminal.presentations()) == before
+
+    # Expose restores the old frame even while the logical screen changes.
+    window = next(e for e in terminal.events() if e[0] == "window")
+    child = int(window[3])
+    xlib.XClearArea(display, child, 0, 0, 10, 10, True)
+    xlib.XSync(display, False)
+    wait_until(lambda: len(terminal.presentations()) > before)
+    before = len(terminal.presentations())
+    terminal.send(b"complete\x1b[?2026l")
+    wait_until(lambda: len(terminal.presentations()) > before)
+    terminal.query(b"\x1b[?2026$p", b"\x1b[?2026;2$y")
+
+    # Unmatched begin markers must not freeze the display or extend the hold.
+    before = len(terminal.presentations())
+    started = time.monotonic()
+    terminal.send(b"\x1b[?2026hwatchdog")
+    for _ in range(4):
+        time.sleep(0.025)
+        terminal.send(b"\x1b[?2026h")
+    wait_until(lambda: len(terminal.presentations()) > before, timeout=0.4)
+    assert time.monotonic() - started < 0.24
+    terminal.query(b"\x1b[?2026$p", b"\x1b[?2026;1$y")
+    before = len(terminal.presentations())
+    terminal.send(b"still responsive")
+    wait_until(lambda: len(terminal.presentations()) > before)
+
+    # Reset cancels a fresh hold and clears the advertised mode.
+    terminal.send(b"\x1b[?2026h\x1bc")
+    terminal.query(b"\x1b[?2026$p", b"\x1b[?2026;2$y")
+    assert not [e for e in terminal.events() if e[0] in ("clear", "fill")]
+
+
 def main():
     binary = str(Path(sys.argv[1] if len(sys.argv) > 1 else "build/src/urxvt").resolve())
     with tempfile.TemporaryDirectory(prefix="urxvt-rendering-") as temporary:
@@ -135,9 +181,11 @@ def main():
                         terminal = Terminal(binary, directory, env, font)
                         try:
                             check_frames(terminal, xlib, display)
+                            check_synchronized(terminal, xlib, display)
                         finally:
                             terminal.close()
                         print(f"PASS: frame presentation, expose and resize ({font})")
+                        print(f"PASS: synchronized output, queries, watchdog and reset ({font})")
                 finally:
                     xlib.XCloseDisplay(display)
             finally:

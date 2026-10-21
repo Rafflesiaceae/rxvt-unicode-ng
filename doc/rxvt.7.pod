@@ -2079,6 +2079,18 @@ Unlike XTerm, coordinates larger than 2015 will work fine.
 
 =end table
 
+=item B<< C<Pm = 2026> >> (Synchronized output)
+
+C<ESC [ ? 2026 h> holds the last completed frame while incoming output
+continues to update the logical screen. C<ESC [ ? 2026 l> presents the
+completed update. C<ESC [ ? 2026 $ p> reports C<1> while the mode is set
+and C<2> while reset.
+
+A watchdog releases presentation after 150 milliseconds if no end marker
+arrives. Repeated begin markers during that interval do not extend it.
+The watchdog leaves the reported mode set; a later begin marker starts a
+new interval. A terminal reset clears the mode and cancels the watchdog.
+
 =back
 
 X<XTerm>

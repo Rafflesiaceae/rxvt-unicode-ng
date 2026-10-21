@@ -599,6 +599,7 @@ enum {
 #define PrivMode_BlinkingCursor (1UL<<25)
 #define PrivMode_FocusEvent     (1UL<<26)
 #define PrivMode_ExtMouseSGR    (1UL<<27)
+#define PrivMode_SyncOutput     (1UL<<28)
 
 #define PrivMode_mouse_report   (PrivMode_MouseX10|PrivMode_MouseX11|PrivMode_MouseBtnEvent|PrivMode_MouseAnyEvent)
 
@@ -1285,6 +1286,8 @@ struct rxvt_term : zero_initialized, rxvt_vars, rxvt_screen
   void refresh_check ();
   void flush ();
   void flush_cb (ev::timer &w, int revents); ev::timer flush_ev;
+  // A fixed watchdog bounds a synchronized update even if its end is lost.
+  void sync_cb (ev::timer &w, int revents); ev::timer sync_ev;
   void cmdbuf_reify ();
   void cmdbuf_append (const char *str, size_t count);
   bool pty_fill ();

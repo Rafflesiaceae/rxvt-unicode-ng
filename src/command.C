@@ -965,6 +965,13 @@ rxvt_term::flush ()
 {
   flush_ev.stop ();
 
+  // Keep processing and answering the PTY while holding the presented frame.
+  if (sync_ev.is_active ())
+    {
+      display->flush ();
+      return;
+    }
+
 #ifdef HAVE_IMG
   if (bg_flags & BG_NEEDS_REFRESH)
     {
@@ -1027,7 +1034,7 @@ rxvt_term::flush ()
 void
 rxvt_term::refresh_check ()
 {
-  if (want_refresh && !flush_ev.is_active ())
+  if (want_refresh && !sync_ev.is_active () && !flush_ev.is_active ())
     flush_ev.start ();
 
   display->flush ();
@@ -1039,6 +1046,15 @@ rxvt_term::flush_cb (ev::timer &w, int revents)
   make_current ();
 
   refresh_count = 0;
+  flush ();
+}
+
+void
+rxvt_term::sync_cb (ev::timer &w, int revents)
+{
+  make_current ();
+  sync_ev.stop ();
+  // Leave the mode set for DECRQM, but release presentation after 150 ms.
   flush ();
 }
 
@@ -3784,6 +3800,7 @@ rxvt_term::process_terminal_mode (int mode, int priv ecb_unused, unsigned int na
 #if ENABLE_FRILLS
                   { 2004, PrivMode_BracketPaste },
 #endif
+                  { 2026, PrivMode_SyncOutput },
                 };
 
   if (nargs == 0)
@@ -3828,6 +3845,26 @@ rxvt_term::process_terminal_mode (int mode, int priv ecb_unused, unsigned int na
       /* extra handling for values with state unkept  */
       switch (arg[i])
         {
+          case 2026:
+            if (state < 0) // Saving a mode must not change presentation.
+              break;
+
+            if (state)
+              {
+                // Repeated begin markers must not postpone the watchdog.
+                if (!sync_ev.is_active ())
+                  sync_ev.start (0.150);
+                flush_ev.stop ();
+              }
+            else
+              {
+                sync_ev.stop ();
+                // Present at the boundary before parsing subsequent output.
+                want_refresh = 1;
+                flush ();
+              }
+            break;
+
 #if ENABLE_STYLES
           case 1021:
             set_option (Opt_intensityStyles, mode);
