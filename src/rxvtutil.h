@@ -18,10 +18,10 @@ template<typename T, typename U> static inline void max_it (T &a, U b) { a = a >
 template<typename T, typename U, typename V> static inline T    clamp    (T  v, U a, V b) { return v < (T)a ? a : v >(T)b ? b : v; }
 template<typename T, typename U, typename V> static inline void clamp_it (T &v, U a, V b) {    v = v < (T)a ? a : v >(T)b ? b : v; }
 
-// linear interpolation
+// linear interpolation with p in percent
 template<typename T, typename U, typename P>
 static inline T
-lerp (T a, U b, P p)
+rxvt_lerp (T a, U b, P p)
 {
   return (long(a) * long(100 - p) + long(b) * long(p) + 50) / 100;
 }

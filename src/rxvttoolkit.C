@@ -834,7 +834,7 @@ rxvt_color::set (rxvt_screen *screen, const char *name)
   // parse the nonstandard "[alphapercent]" prefix
   if (1 <= sscanf (name, "[%hd]%n", &c.a, &skip))
     {
-      c.a = lerp<int, int, int> (0, rgba::MAX_CC, c.a);
+      c.a = rxvt_lerp<int, int, int> (0, rgba::MAX_CC, c.a);
       name += skip;
     }
 
@@ -981,10 +981,10 @@ rxvt_color::fade (rxvt_screen *screen, int percent, rxvt_color &result, const rg
   result.set (
     screen,
     rgba (
-      lerp (c.r, to.r, percent),
-      lerp (c.g, to.g, percent),
-      lerp (c.b, to.b, percent),
-      lerp (c.a, to.a, percent)
+      rxvt_lerp (c.r, to.r, percent),
+      rxvt_lerp (c.g, to.g, percent),
+      rxvt_lerp (c.b, to.b, percent),
+      rxvt_lerp (c.a, to.a, percent)
     )
   );
 }
