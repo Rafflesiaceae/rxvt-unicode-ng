@@ -34,6 +34,11 @@ def nonnegative(value):
     return number
 
 
+def refresh_rate(value):
+    # Leaving out -fps lets the terminal use the highest active display rate.
+    return None if value == "auto" else nonnegative(value)
+
+
 @contextlib.contextmanager
 def isolated_display(directory):
     read_fd, write_fd = os.pipe()
@@ -75,7 +80,11 @@ def run_case(binary, driver, env, args, frame, synchronized, batching):
             attributes[3] |= termios.ECHO
             termios.tcsetattr(slave, termios.TCSANOW, attributes)
         command = [str(binary), "-pty-fd", str(master), "-geometry", args.geometry,
-                   "-fn", args.font, "-name", "urxvt-latency", "+sb", "+bc", "-fps", str(args.fps)]
+                   "-fn", args.font, "-name", "urxvt-latency", "+sb", "+bc"]
+        if args.fps is not None:
+            command.extend(["-fps", str(args.fps)])
+        else:
+            command.append("+fps")
         for name, value in (("frameBuffering", frame), ("synchronizedOutput", synchronized),
                             ("refreshBatching", batching)):
             command.append(("-" if value else "+") + name)
@@ -120,8 +129,8 @@ def main():
     parser.add_argument("--samples", type=positive, default=30)
     parser.add_argument("--warmup", type=positive, default=5)
     parser.add_argument("--mode", choices=("key", "output", "synchronized", "watchdog"), default="key")
-    parser.add_argument("--fps", type=nonnegative, default=60,
-                        help="configured frame-rate limit; 0 disables the limit")
+    parser.add_argument("--fps", type=refresh_rate, default=None,
+                        help="frame-rate limit; auto follows the monitor (default), 0 disables the limit")
     parser.add_argument("--interval-ms", type=nonnegative, default=40)
     parser.add_argument("--gap-ms", type=nonnegative, default=20)
     parser.add_argument("--geometry", default="120x40")
@@ -145,7 +154,8 @@ def main():
             ["pkg-config", "--cflags", "--libs", "x11", "xdamage", "xtst"], text=True).split()
         subprocess.run(["cc", "-O2", "-Wall", "-Wextra", "-o", str(driver),
                         str(Path(__file__).with_name("latency-driver.c")), *flags], check=True)
-        rate = f"{args.fps:g} fps" if args.fps else "unlimited refresh rate"
+        rate = ("automatic monitor refresh" if args.fps is None else
+                f"{args.fps:g} fps" if args.fps else "unlimited refresh rate")
         print(f"Mode: {args.mode}; {args.samples} samples/case; {rate}", flush=True)
         print("Milliseconds to first X server window update; physical display latency is excluded.", flush=True)
         print("frame sync batch | median      p95      max", flush=True)

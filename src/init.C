@@ -857,10 +857,12 @@ rxvt_term::init2 (int argc, const char *const *argv)
 
   {
     ev_tstamp interval = 1. / 60.;
+    refresh_rate_auto = true;
 
 #if ENABLE_FRILLS
     if (rs[Rs_refreshRate])
       {
+        refresh_rate_auto = false;
         interval = atof (rs[Rs_refreshRate]);
         if (interval <= 0.)
           interval = -interval;
@@ -889,6 +891,12 @@ rxvt_term::init2 (int argc, const char *const *argv)
   pty = ptytty::create ();
 
   create_windows (argc, argv);
+
+#if HAVE_XRANDR
+  if (refresh_rate_auto && (display->flags & DISPLAY_HAS_RANDR))
+    monitor_ev.start (display, display->root);
+#endif
+  update_refresh_rate ();
 
   init_xlocale ();
 

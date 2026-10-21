@@ -1451,6 +1451,16 @@ rxvt_term::x_cb (XEvent &ev)
 
   dLocal (Display *, dpy);
 
+#if HAVE_XRANDR
+  if ((display->flags & DISPLAY_HAS_RANDR)
+      && (ev.type == display->randr_event_base + RRScreenChangeNotify
+          || ev.type == display->randr_event_base + RRNotify))
+    {
+      update_refresh_rate ();
+      return;
+    }
+#endif
+
   if (ev.xany.window == vt
       && SHOULD_INVOKE (HOOK_X_EVENT)
       && HOOK_INVOKE ((this, HOOK_X_EVENT, DT_XEVENT, &ev, DT_END)))
@@ -2364,7 +2374,7 @@ rxvt_term::cmd_parse ()
                     {
                       refresh_count = 0;
 
-                      if (!option (Opt_skipScroll) || ev_time () > ev::now () + 1. / 60.)
+                      if (!option (Opt_skipScroll) || ev_time () > ev::now () + refresh_interval)
                         {
                           refreshnow = true;
                           ch = NOCHAR;

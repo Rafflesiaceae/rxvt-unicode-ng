@@ -28,13 +28,14 @@ def wait_until(predicate, timeout=2):
 
 
 class Terminal:
-    def __init__(self, binary, directory, env, font="fixed", resources=()):
+    def __init__(self, binary, directory, env, font="fixed", resources=(), arguments=()):
         self.trace = directory / f"trace-{time.monotonic_ns()}"
         self.master, self.slave = pty.openpty()
         tty.setraw(self.slave)
         self.errors = tempfile.TemporaryFile()
         args = [binary, "-pty-fd", str(self.master), "-geometry", "20x4",
                 "-fn", font, "+sb", "+bc"]
+        args.extend(arguments)
         for resource in resources:
             args.extend(["-xrm", resource])
         self.process = subprocess.Popen(

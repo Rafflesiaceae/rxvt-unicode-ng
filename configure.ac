@@ -616,6 +616,14 @@ dnl# --------------------------------------------------------------------------
 dnl# now add and remove other stuff
 dnl# --------------------------------------------------------------------------
 support_image=no
+# Use RandR mode timings for the default refresh interval when available.
+RXVT_CHECK_MODULES([XRANDR], [xrandr], [
+  if $PKG_CONFIG --atleast-version=1.3 xrandr; then
+    X_LIBS="$XRANDR_LIBS $X_LIBS"
+    CPPFLAGS="$CPPFLAGS $XRANDR_CFLAGS"
+    AC_DEFINE(HAVE_XRANDR, 1, Define if RandR monitor refresh detection is available)
+  fi
+], [:])
 if test x$support_inheritpixmap = xyes || test x$support_pixbuf = xyes; then
   support_image=yes
 fi

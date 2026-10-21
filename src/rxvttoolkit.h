@@ -29,6 +29,9 @@
 #if XFT
 # include <X11/Xft/Xft.h>
 #endif
+#if HAVE_XRANDR
+# include <X11/extensions/Xrandr.h>
+#endif
 
 #include "ev_cpp.h"
 
@@ -223,6 +226,7 @@ enum
 {
   DISPLAY_HAS_RENDER      = 1 << 0,
   DISPLAY_HAS_RENDER_CONV = 1 << 1,
+  DISPLAY_HAS_RANDR       = 1 << 2,
 };
 
 struct rxvt_display : refcounted
@@ -252,6 +256,17 @@ struct rxvt_display : refcounted
   Cursor    blank_cursor;
 #endif
   uint8_t   flags;
+
+#if HAVE_XRANDR
+  // Share the highest active display rate across terminals on this screen.
+  double refresh_rate;
+  int randr_event_base;
+  bool randr_current;
+  // Keep cache initialization and event handling with mode discovery.
+  void init_monitors ();
+  void handle_monitor_event (XEvent &ev);
+  void update_monitors ();
+#endif
 
   rxvt_display (const char *id);
   XrmDatabase get_resources (bool refresh);

@@ -753,8 +753,15 @@ when applications pause longer than its waiting period during a repaint.
 
 =item B<refreshRate:> I<number>
 
-Compile I<frills>: When positive, sets the maximum refreshes per second
-(the default is C<60>). When zero or negative, sets the minimum interval
+Compile I<frills>: When positive, sets the maximum refreshes per second.
+By default, use the highest refresh rate currently in use across all active
+displays, updating when the RandR configuration changes. If RandR support
+or usable mode timings are unavailable, fall back to C<60>.
+This controls refresh scheduling, not synchronization with display scanout.
+
+An explicit value overrides monitor detection; C<+fps> ignores a configured
+resource value and restores automatic selection.
+When zero or negative, set the minimum interval
 between refreshes, negated. That is, positive numbers limit the number
 of refreshes per second to that number, similar to a fps limiter in
 games. A negative number gets negated and directly sets the minimum

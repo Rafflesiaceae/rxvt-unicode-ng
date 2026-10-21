@@ -9,6 +9,21 @@ python3 tests/rendering.py build/src/urxvt
 They require Xvfb, a C compiler and X11 development headers. They trace X11
 requests without capturing screenshots.
 
+# Monitor refresh detection
+
+With RandR support, check the maximum rate across active displays, window moves,
+live mode changes, interlace/doublescan flags, unavailable timings and
+explicit resource overrides:
+
+```sh
+python3 tests/refresh-rate.py build/src/urxvt
+```
+
+This requires RandR development headers in addition to the rendering test
+dependencies. The test supplies deterministic CRTC mode timings on a private
+Xvfb display and checks scheduled drawing delays; it does not change the user's
+display settings.
+
 # Latency measurements
 
 The latency benchmark launches its own Xvfb server and compares all eight
@@ -46,7 +61,10 @@ python3 tests/latency.py build/src/urxvt --mode synchronized --gap-ms 20
 # An application omits its end marker, exercising the 150 ms watchdog.
 python3 tests/latency.py build/src/urxvt --mode watchdog --samples 3 --warmup 1
 
-# Separate the configured 60 fps scheduling delay from rendering work.
+# Override automatic monitor detection with an explicit limit.
+python3 tests/latency.py build/src/urxvt --fps 144
+
+# Remove the refresh-rate wait to isolate rendering work.
 python3 tests/latency.py build/src/urxvt --fps 0
 
 # Compare a larger window using the same font and workload.
@@ -65,3 +83,8 @@ completed frame, compositor scheduling, monitor scanout, physical keyboard
 hardware or actual key-to-photon latency. Xvfb is a software X server, so results
 also cannot establish the cost of copies on the user's actual GPU or compositor.
 The test captures no screenshots and does not send input to the user's display.
+
+The default refresh rate uses the highest active display rate. Xvfb often provides no
+usable mode timings, in which case automatic detection falls back to 60 Hz.
+It does not discover the host's physical monitor rate; use `--fps` for an explicit
+rate or the monitor fixtures above to exercise detection.

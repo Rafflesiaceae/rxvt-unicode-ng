@@ -196,6 +196,13 @@ x11_dep = dependency('x11')
 # Every X client links these, extended by the optional libraries below.
 x_deps = [x11_dep]
 
+# RandR is optional; displays without usable mode timings retain a 60 Hz fallback.
+xrandr_dep = dependency('xrandr', version: '>= 1.3', required: false)
+if xrandr_dep.found()
+  cdata.set('HAVE_XRANDR', 1)
+  x_deps += xrandr_dep
+endif
+
 cdata.set('XLIB_ILLEGAL_ACCESS', cpp.compiles('''
   #define XLIB_ILLEGAL_ACCESS
   #include <X11/Xlib.h>

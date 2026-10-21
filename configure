@@ -7459,6 +7459,31 @@ printf "%s\n" "#define HAVE_NL_LANGINFO 1" >>confdefs.h
 fi
 
 support_image=no
+# Use RandR mode timings for the default refresh interval when available.
+
+  { printf '%s\n' "$as_me:${as_lineno-$LINENO}: checking for xrandr (using pkg-config)" >&5
+printf %s "checking for xrandr (using pkg-config)... " >&6; }
+  if test $PKG_CONFIG != no && $PKG_CONFIG --exists xrandr; then
+    XRANDR_CFLAGS="`$PKG_CONFIG --cflags xrandr`"
+    XRANDR_LIBS="`$PKG_CONFIG --libs xrandr`"
+
+    { printf '%s\n' "$as_me:${as_lineno-$LINENO}: result: ok" >&5
+printf '%s\n' "ok" >&6; }
+
+  if $PKG_CONFIG --atleast-version=1.3 xrandr; then
+    X_LIBS="$XRANDR_LIBS $X_LIBS"
+    CPPFLAGS="$CPPFLAGS $XRANDR_CFLAGS"
+
+printf '%s\n' "#define HAVE_XRANDR 1" >>confdefs.h
+
+  fi
+
+  else
+    { printf '%s\n' "$as_me:${as_lineno-$LINENO}: result: no" >&5
+printf '%s\n' "no" >&6; }
+    :
+  fi
+
 if test x$support_inheritpixmap = xyes || test x$support_pixbuf = xyes; then
   support_image=yes
 fi

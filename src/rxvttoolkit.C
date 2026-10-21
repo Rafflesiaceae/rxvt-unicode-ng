@@ -491,6 +491,9 @@ bool rxvt_display::ref_init ()
 #endif
 
   flags = 0;
+#if HAVE_XRANDR
+  init_monitors ();
+#endif
 #if XRENDER
   int major, minor;
   if (XRenderQueryVersion (dpy, &major, &minor))
@@ -607,6 +610,10 @@ void rxvt_display::flush_cb (ev::prepare &w, int revents)
       {
         XEvent xev;
         XNextEvent (dpy, &xev);
+
+#if HAVE_XRANDR
+        handle_monitor_event (xev);
+#endif
 
 #if USE_XIM
         if (!XFilterEvent (&xev, None))

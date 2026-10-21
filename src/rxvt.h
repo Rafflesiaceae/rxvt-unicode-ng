@@ -1284,6 +1284,11 @@ struct rxvt_term : zero_initialized, rxvt_vars, rxvt_screen
   void child_cb (ev::child &w, int revents); ev::child child_ev;
   void destroy_cb (ev::idle &w, int revents); ev::idle destroy_ev;
   void refresh_check ();
+  void update_refresh_rate ();
+  bool refresh_rate_auto;
+#if HAVE_XRANDR
+  xevent_watcher monitor_ev;
+#endif
   // Coalesce legacy output bursts without extending their first deadline.
   bool batch_pending;
   ev_tstamp refresh_interval, last_present, batch_started, batch_activity;
