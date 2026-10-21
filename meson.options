@@ -18,9 +18,9 @@ option('xim', type: 'boolean', value: true,
   description: 'XIM (X Input Method) protocol support')
 option('frills', type: 'boolean', value: true,
   description: 'support for rarely used features')
-option('transparency', type: 'boolean', value: true,
+option('transparency', type: 'boolean', value: false,
   description: 'transparent backgrounds')
-option('fading', type: 'boolean', value: true,
+option('fading', type: 'boolean', value: false,
   description: 'colors fading when off focus')
 option('font-styles', type: 'boolean', value: true,
   description: 'bold and italic support')
@@ -28,7 +28,7 @@ option('unicode3', type: 'boolean', value: false,
   description: 'use 21 instead of 16 bits to represent unicode characters')
 option('combining', type: 'boolean', value: true,
   description: 'composition of base and combining characters')
-option('256-color', type: 'boolean', value: false,
+option('256-color', type: 'boolean', value: true,
   description: '256-color support')
 option('iso14755', type: 'boolean', value: true,
   description: 'extended ISO 14755 modes')
@@ -50,7 +50,7 @@ option('slipwheeling', type: 'boolean', value: true,
   description: 'slip wheel scrolling (requires mousewheel)')
 option('smart-resize', type: 'boolean', value: false,
   description: 'smart growth/shrink behaviour')
-option('text-blink', type: 'boolean', value: true,
+option('text-blink', type: 'boolean', value: false,
   description: 'blinking text')
 option('pointer-blank', type: 'boolean', value: true,
   description: 'pointer blanking when typing or inactive')
