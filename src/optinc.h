@@ -17,6 +17,7 @@
  def(scrollWithBuffer)
  def(jumpScroll)
  def(skipScroll)
+ def(refreshBatching)
  def(mouseWheelScrollPage)
 #if POINTER_BLANK
  def(pointerBlank)

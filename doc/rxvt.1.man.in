@@ -763,6 +763,18 @@ option \fB\-ss\fR.
 \&\fBFalse\fR: specify that everything is to be displayed, even
 if the refresh is too fast for the human eye to read anything (or the
 monitor to display anything); option \fB+ss\fR.
+.IP "\fBrefreshBatching:\fR \fIboolean\fR" 4
+.IX Item "refreshBatching: boolean"
+When true, collect output until there have been 2 milliseconds without new
+input, waiting at most 16 milliseconds from the start of a pending update.
+The configured \f(CWrefreshRate\fR can require a longer wait to respect its
+frame rate limit. This can reduce flicker from applications that clear and
+repaint in separate writes without using synchronized output (mode 2026).
+The default is true.
+.Sp
+Synchronized output end markers and watchdog expiry present immediately
+without this additional wait. Batching cannot guarantee complete frames
+when applications pause longer than its waiting period during a repaint.
 .IP "\fBrefreshRate:\fR \fInumber\fR" 4
 .IX Item "refreshRate: number"
 Compile \fIfrills\fR: When positive, sets the maximum refreshes per second

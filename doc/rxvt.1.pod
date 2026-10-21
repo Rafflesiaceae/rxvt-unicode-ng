@@ -714,6 +714,19 @@ B<False>: specify that everything is to be displayed, even
 if the refresh is too fast for the human eye to read anything (or the
 monitor to display anything); option B<+ss>.
 
+=item B<refreshBatching:> I<boolean>
+
+When true, collect output until there have been 2 milliseconds without new
+input, waiting at most 16 milliseconds from the start of a pending update.
+The configured C<refreshRate> can require a longer wait to respect its
+frame rate limit. This can reduce flicker from applications that clear and
+repaint in separate writes without using synchronized output (mode 2026).
+The default is true.
+
+Synchronized output end markers and watchdog expiry present immediately
+without this additional wait. Batching cannot guarantee complete frames
+when applications pause longer than its waiting period during a repaint.
+
 =item B<refreshRate:> I<number>
 
 Compile I<frills>: When positive, sets the maximum refreshes per second

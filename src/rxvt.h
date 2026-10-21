@@ -1284,6 +1284,11 @@ struct rxvt_term : zero_initialized, rxvt_vars, rxvt_screen
   void child_cb (ev::child &w, int revents); ev::child child_ev;
   void destroy_cb (ev::idle &w, int revents); ev::idle destroy_ev;
   void refresh_check ();
+  // Coalesce legacy output bursts without extending their first deadline.
+  bool batch_pending;
+  ev_tstamp refresh_interval, last_present, batch_started, batch_activity;
+  ev_tstamp refresh_delay () const;
+  bool refresh_deferred ();
   void flush ();
   void flush_cb (ev::timer &w, int revents); ev::timer flush_ev;
   // A fixed watchdog bounds a synchronized update even if its end is lost.

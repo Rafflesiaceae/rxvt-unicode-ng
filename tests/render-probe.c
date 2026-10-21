@@ -64,5 +64,23 @@ int XFillRectangle (Display *d, Drawable target, GC gc,
   typeof (&XFillRectangle) real = dlsym (RTLD_NEXT, "XFillRectangle");
   if (target == terminal)
     record ("fill", 0, target);
+  else
+    record ("paint", 0, target);
   return real (d, target, gc, x, y, w, h);
+}
+
+int XDrawImageString (Display *d, Drawable target, GC gc,
+                      int x, int y, const char *text, int length)
+{
+  typeof (&XDrawImageString) real = dlsym (RTLD_NEXT, "XDrawImageString");
+  record (target == terminal ? "draw" : "paint", 0, target);
+  return real (d, target, gc, x, y, text, length);
+}
+
+int XDrawImageString16 (Display *d, Drawable target, GC gc,
+                        int x, int y, const XChar2b *text, int length)
+{
+  typeof (&XDrawImageString16) real = dlsym (RTLD_NEXT, "XDrawImageString16");
+  record (target == terminal ? "draw" : "paint", 0, target);
+  return real (d, target, gc, x, y, text, length);
 }

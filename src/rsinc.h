@@ -21,6 +21,7 @@
   def (multiClickTime)
   def (jumpScroll)
   def (skipScroll)
+  def (refreshBatching)
   def (scrollBar)
   def (scrollBar_right)
   def (scrollBar_floating)

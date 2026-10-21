@@ -598,6 +598,7 @@ rxvt_term::init_vars ()
   set_option (Opt_iso14755);
   set_option (Opt_iso14755_52);
   set_option (Opt_buffered);
+  set_option (Opt_refreshBatching);
 }
 
 #if ENABLE_PERL
@@ -866,6 +867,7 @@ rxvt_term::init2 (int argc, const char *const *argv)
       }
 #endif
 
+    refresh_interval = interval;
     flush_ev.set (interval, interval);
   }
 

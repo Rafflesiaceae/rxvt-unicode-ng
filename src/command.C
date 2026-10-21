@@ -960,13 +960,40 @@ rxvt_term::key_release (XKeyEvent &ev)
 #endif
 }
 
+ev_tstamp
+rxvt_term::refresh_delay () const
+{
+  // Honour the configured frame rate as well as the quiet and burst limits.
+  ev_tstamp deadline = min (batch_activity + 0.002, batch_started + 0.016);
+  return max (ev_tstamp (0), max (deadline, last_present + refresh_interval) - ev::now ());
+}
+
+bool
+rxvt_term::refresh_deferred ()
+{
+  if (sync_ev.is_active ())
+    return true;
+
+  if (batch_pending && option (Opt_refreshBatching))
+    {
+      ev_tstamp delay = refresh_delay ();
+      if (delay > 0.)
+        {
+          flush_ev.start (delay);
+          return true;
+        }
+    }
+
+  return false;
+}
+
 void
 rxvt_term::flush ()
 {
   flush_ev.stop ();
 
   // Keep processing and answering the PTY while holding the presented frame.
-  if (sync_ev.is_active ())
+  if (refresh_deferred ())
     {
       display->flush ();
       return;
@@ -1034,8 +1061,15 @@ rxvt_term::flush ()
 void
 rxvt_term::refresh_check ()
 {
-  if (want_refresh && !sync_ev.is_active () && !flush_ev.is_active ())
-    flush_ev.start ();
+  if (want_refresh && !sync_ev.is_active ())
+    {
+      if (batch_pending && option (Opt_refreshBatching))
+        flush_ev.start (refresh_delay ());
+      else if (!flush_ev.is_active ())
+        flush_ev.start (refresh_interval);
+    }
+  else if (!want_refresh)
+    batch_pending = false;
 
   display->flush ();
 }
@@ -1055,6 +1089,7 @@ rxvt_term::sync_cb (ev::timer &w, int revents)
   make_current ();
   sync_ev.stop ();
   // Leave the mode set for DECRQM, but release presentation after 150 ms.
+  batch_pending = false;
   flush ();
 }
 
@@ -2266,6 +2301,14 @@ rxvt_term::button_release (XButtonEvent &ev)
 void ecb_hot
 rxvt_term::cmd_parse ()
 {
+  if (option (Opt_refreshBatching) && cmdbuf_ptr < cmdbuf_endp)
+    {
+      if (!batch_pending)
+        batch_started = ev::now ();
+      batch_activity = ev::now ();
+      batch_pending = true;
+    }
+
   wchar_t ch = NOCHAR;
   char *seq_begin; // remember start of esc-sequence here
 
@@ -3860,6 +3903,7 @@ rxvt_term::process_terminal_mode (int mode, int priv ecb_unused, unsigned int na
               {
                 sync_ev.stop ();
                 // Present at the boundary before parsing subsequent output.
+                batch_pending = false;
                 want_refresh = 1;
                 flush ();
               }

@@ -521,6 +521,7 @@ rxvt_term::scr_soft_reset () noexcept
 {
   /* only affects modes, nothing drastic such as clearing the screen */
   sync_ev.stop ();
+  batch_pending = false;
   priv_modes &= ~PrivMode_SyncOutput;
   SavedModes &= ~PrivMode_SyncOutput;
 #if ENABLE_OVERLAY
@@ -2065,7 +2066,7 @@ void ecb_hot
 rxvt_term::scr_refresh () noexcept
 {
   // Also guard parser-driven refreshes and refresh requests from extensions.
-  if (sync_ev.is_active ())
+  if (refresh_deferred ())
     {
       want_refresh = 1;
       return;
@@ -2080,10 +2081,14 @@ rxvt_term::scr_refresh () noexcept
   int cur_col;
   int cursorwidth;
 
-  want_refresh = 0;        /* screen is current */
-
   if (refresh_type == NO_REFRESH || !mapped)
-    return;
+    {
+      // Expose events restore the old frame; retain updates until drawable.
+      want_refresh = 1;
+      return;
+    }
+
+  want_refresh = 0;        /* screen is current */
 
   scr_frame_resize ();
 
@@ -2527,6 +2532,8 @@ rxvt_term::scr_refresh () noexcept
   num_scr_allow = 1;
 
   // Publish only after glyphs, decorations, cursor and refresh hooks finish.
+  batch_pending = false;
+  last_present = ev::now ();
   scr_present (0, 0, frame_width, frame_height);
 }
 

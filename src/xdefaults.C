@@ -222,6 +222,7 @@ optList[] = {
 #if XFT
               BOOL (Rs_buffered, "buffered", NULL, Opt_buffered, 0, NULL),
 #endif
+              BOOL (Rs_refreshBatching, "refreshBatching", NULL, Opt_refreshBatching, 0, NULL),
 #if ENABLE_FRILLS
               STRG (Rs_refreshRate, "refreshRate", "fps", "number", "refresh rate / frames per second"),
               STRG (Rs_depth, "depth", "depth", "number", "depth of visual to request"),
