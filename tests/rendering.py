@@ -80,6 +80,46 @@ class Terminal:
         assert "X Error" not in errors, errors
 
 
+def check_glyph_overflow(terminal, xlib, display):
+    child = int(next(e for e in terminal.events() if e[0] == "window")[3])
+    root = ctypes.c_ulong()
+    x, y = ctypes.c_int(), ctypes.c_int()
+    width, height, border, depth = (ctypes.c_uint() for _ in range(4))
+    assert xlib.XGetGeometry(display, child, ctypes.byref(root), ctypes.byref(x),
+                             ctypes.byref(y), ctypes.byref(width), ctypes.byref(height),
+                             ctypes.byref(border), ctypes.byref(depth))
+    row_height = height.value // 4
+
+    def paint(data):
+        before = len(terminal.presentations())
+        terminal.send(data)
+        wait_until(lambda: len(terminal.presentations()) > before)
+        time.sleep(0.02)
+
+    def pixels(row):
+        # Compare pixels in memory; no screenshot files are created.
+        image = xlib.XGetImage(display, child, 0, row * row_height,
+                              width.value, row_height, ctypes.c_ulong(-1), 2)
+        assert image
+        try:
+            return tuple(xlib.XGetPixel(image, x, y)
+                         for y in range(row_height) for x in range(width.value))
+        finally:
+            xlib.XDestroyImage(image)
+
+    paint(b"\x1b[0m\x1b[2J\x1b[H")
+    neighbors = pixels(0), pixels(2)
+    blank = pixels(1)
+    # Liberation Mono's stacked accent and script g extend above/below its
+    # advertised line metrics. Only the middle row should acquire ink.
+    paint("\x1b[2;3H\u1e4c\u210a".encode())
+    assert pixels(1) != blank, "overflow glyphs were not drawn"
+    assert (pixels(0), pixels(2)) == neighbors, "glyphs painted into neighboring rows"
+    paint(b"\x1b[2;1H\x1b[2K")
+    assert pixels(1) == blank, "erasing the glyph row left pixels behind"
+    assert (pixels(0), pixels(2)) == neighbors, "erasing the glyph row left neighboring artifacts"
+
+
 def check_frames(terminal, xlib, display):
     before = len(terminal.presentations())
     # Mix default and coloured erases, decorations, glyphs and scrolling.
@@ -324,12 +364,32 @@ def main():
                 xlib.XUnmapWindow.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
                 xlib.XMapWindow.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
                 xlib.XCloseDisplay.argtypes = [ctypes.c_void_p]
+                xlib.XGetGeometry.argtypes = [ctypes.c_void_p, ctypes.c_ulong,
+                    ctypes.POINTER(ctypes.c_ulong), ctypes.POINTER(ctypes.c_int),
+                    ctypes.POINTER(ctypes.c_int), *([ctypes.POINTER(ctypes.c_uint)] * 4)]
+                xlib.XGetImage.argtypes = [ctypes.c_void_p, ctypes.c_ulong,
+                    ctypes.c_int, ctypes.c_int, ctypes.c_uint, ctypes.c_uint,
+                    ctypes.c_ulong, ctypes.c_int]
+                xlib.XGetImage.restype = ctypes.c_void_p
+                xlib.XGetPixel.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int]
+                xlib.XGetPixel.restype = ctypes.c_ulong
+                xlib.XDestroyImage.argtypes = [ctypes.c_void_p]
                 display = xlib.XOpenDisplay(display_name.encode())
                 assert display, "could not open test display"
                 try:
-                    # Batching is on by default; the baseline variants cover the
+                    # Batching is on by default; the baseline checks cover the
                     # unbatched path explicitly.
                     unbatched = "URxvt.refreshBatching: false"
+                    for buffered in (True, False):
+                        terminal = Terminal(binary, directory, env,
+                            "xft:Liberation Mono:size=11", resources=(
+                                "URxvt.frameBuffering: true", "URxvt.lineSpace: 0",
+                                unbatched, f"URxvt.buffered: {str(buffered).lower()}"))
+                        try:
+                            check_glyph_overflow(terminal, xlib, display)
+                        finally:
+                            terminal.close()
+                    print("PASS: tall Xft glyphs stay within their row and erase cleanly")
                     variants = (("fixed", (unbatched,)), ("xft:monospace:size=11", (unbatched,)),
                                 ("xft:monospace:size=11", (unbatched, "URxvt.depth: 32",
                                  "URxvt.background: [50]black", "URxvt.foreground: [80]white")))

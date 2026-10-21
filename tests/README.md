@@ -6,8 +6,9 @@ Run the functional integration checks with:
 python3 tests/rendering.py build/src/urxvt
 ```
 
-They require Xvfb, a C compiler and X11 development headers. They trace X11
-requests without capturing screenshots.
+They require Xvfb, a C compiler, X11 development headers and Liberation Mono
+for the glyph-overflow check. They trace X11 requests and compare neighboring
+rows in memory without saving screenshots.
 
 # Monitor refresh detection
 

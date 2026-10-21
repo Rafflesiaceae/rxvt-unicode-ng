@@ -1590,7 +1590,18 @@ rxvt_font_xft::draw (rxvt_drawable &d, int x, int y,
   else
     {
       clear_rect (d, x, y, w, h, bg);
+      // Confine glyph ink to its row: dirty tracking cannot erase pixels
+      // spilled into an otherwise unchanged neighbor in the retained frame.
+      // Keep the full width for wide glyphs and horizontal overhangs.
+      bool clip_row = ep != enc && d.drawable == term->frame;
+      if (clip_row)
+        {
+          XRectangle clip = { 0, short (y), (unsigned short)term->vt_width, (unsigned short)h };
+          XftDrawSetClipRectangles (d, 0, 0, &clip, 1);
+        }
       XftDrawGlyphSpec (d, &term->pix_colors[fg].c, f, enc, ep - enc);
+      if (clip_row)
+        XftDrawSetClip (d, 0);
     }
 }
 
