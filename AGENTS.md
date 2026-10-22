@@ -1,2 +1,4 @@
-Changes to this repository should be done to minimize conflicts as upstream
-changes are integrated into this repository all the time.
+- Changes to this repository should be done to minimize conflicts as upstream
+  changes are integrated into this repository all the time.
+
+- Ignore all files below ./.legacy/ for changes

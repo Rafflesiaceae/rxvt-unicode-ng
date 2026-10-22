@@ -13,3 +13,5 @@ src/rxvtd
 
 src/perlxsi.c
 src/rclock
+
+.legacy/
