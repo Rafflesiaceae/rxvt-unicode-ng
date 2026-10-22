@@ -154,6 +154,44 @@ keyboard_manager::lookup_keysym (rxvt_term *term, KeySym keysym, unsigned int st
   return index >= 0 ? keymap [index] : 0;
 }
 
+#if !ENABLE_PERL
+// Without the perl interpreter the "eval" extension is not available, so
+// keysym actions such as "eval:paste_clipboard" would silently do nothing.
+// Implement the clipboard helpers of that extension natively instead, so
+// that configurations written for the perl build keep working. Returns
+// whether the expression was recognised and handled.
+static bool
+builtin_eval (rxvt_term *term, const char *expr)
+{
+  if (!strcmp (expr, "selection_to_clipboard"))
+    {
+      // same as the builtin Control-Meta-c: copy the PRIMARY text to the
+      // CLIPBOARD and claim ownership of it
+      if (term->selection.len > 0)
+        {
+          unsigned int n = term->selection.len;
+          wchar_t *copy = (wchar_t *)rxvt_malloc ((n + 1) * sizeof (wchar_t));
+
+          memcpy (copy, term->selection.text, n * sizeof (wchar_t));
+          copy[n] = 0;
+
+          free (term->selection.clip_text);
+          term->selection.clip_text = copy;
+          term->selection.clip_len  = n;
+          term->selection_grab (CurrentTime, true);
+        }
+    }
+  else if (!strcmp (expr, "paste_primary"))
+    term->selection_request (CurrentTime, Sel_Primary);
+  else if (!strcmp (expr, "paste_clipboard"))
+    term->selection_request (CurrentTime, Sel_Clipboard);
+  else
+    return false;
+
+  return true;
+}
+#endif
+
 bool
 keyboard_manager::dispatch (rxvt_term *term, KeySym keysym, unsigned int state, const char *kbuf, int len)
 {
@@ -181,6 +219,10 @@ keyboard_manager::dispatch (rxvt_term *term, KeySym keysym, unsigned int state, 
                 term->tt_write_user_input (colon + 1, strlen (colon + 1));
               else if (strncmp (str, "perl:", 5) == 0)
                 HOOK_INVOKE ((term, HOOK_USER_COMMAND, DT_STR, colon + 1, DT_END));
+#if !ENABLE_PERL
+              else if (strncmp (str, "eval:", 5) == 0 && builtin_eval (term, colon + 1))
+                ;
+#endif
               else
                 HOOK_INVOKE ((term, HOOK_ACTION, DT_STR_LEN, str, colon - str, DT_STR, colon + 1, DT_INT, 0, DT_STR_LEN, kbuf, len, DT_END));
             }
