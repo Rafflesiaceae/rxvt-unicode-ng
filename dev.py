@@ -5,7 +5,7 @@
 # subcommands:
 #
 #   ./dev.py configure [--prefix DIR] [-- MESON_ARGS...]
-#   ./dev.py build [-j N]
+#   ./dev.py build [-j N] [--copy-lua-scripts-to-home]
 #   ./dev.py test [-j N]
 #   ./dev.py run [-- RXVT_ARGS...]
 #   ./dev.py install [--destdir DIR]
@@ -387,6 +387,18 @@ def cmd_configure(args):
 def cmd_build(args):
     ensure_configured()
     compile_(args.jobs)
+    if args.copy_lua_scripts_to_home:
+        # Match the plugin loader, which ignores relative XDG_CONFIG_HOME paths.
+        config = os.environ.get("XDG_CONFIG_HOME", "")
+        if not os.path.isabs(config):
+            config = os.path.expanduser("~/.config")
+        destination = os.path.join(config, "urxvt", "plugins")
+        os.makedirs(destination, exist_ok=True)
+        source = os.path.join(ROOT, "src", "lua")
+        for name in sorted(os.listdir(source)):
+            if name.endswith(".lua"):
+                print(f"+ copy {name} to {destination}", flush=True)
+                shutil.copy2(os.path.join(source, name), destination)
 
 
 def cmd_test(args):
@@ -464,6 +476,12 @@ def main(argv=None):
 
     p = sub.add_parser(
         "build", parents=[jobs_parser], help="build, configuring first if needed"
+    )
+    p.add_argument(
+        "--copy-lua-scripts-to-home",
+        action="store_true",
+        help="copy bundled Lua scripts to $XDG_CONFIG_HOME/urxvt/plugins "
+        "(default: ~/.config/urxvt/plugins), overwriting matching files",
     )
     p.set_defaults(func=cmd_build)
 
