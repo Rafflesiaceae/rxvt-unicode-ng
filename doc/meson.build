@@ -14,13 +14,20 @@ sed_args = [
 ]
 
 # [source, installed name, section]
-foreach page : [
+man_pages = [
   ['rxvt.1.man.in', rxvtname, '1'],
-  ['rxvtc.1.man.in', rxvtname + 'c', '1'],
-  ['rxvtd.1.man.in', rxvtname + 'd', '1'],
   ['rxvt.7.man.in', rxvtname, '7'],
   ['rclock.1.man.in', 'urclock', '1'],
 ]
+# The daemon pages are only installed together with the daemon.
+if get_option('daemon')
+  man_pages += [
+    ['rxvtc.1.man.in', rxvtname + 'c', '1'],
+    ['rxvtd.1.man.in', rxvtname + 'd', '1'],
+  ]
+endif
+
+foreach page : man_pages
   custom_target(page[1] + '.' + page[2],
     input: page[0],
     output: page[1] + '.' + page[2],

@@ -427,6 +427,7 @@ summary({
 
 summary({
   'embedded perl': false,
+  'daemon': get_option('daemon'),
   'lua plugins': have_lua,
   'image library': pixbuf_dep.found() ? 'gdk-pixbuf' : 'none',
   'xft': have_xft,

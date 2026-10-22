@@ -41,23 +41,26 @@ executable(rxvtname, 'rxvt.C',
   install: true,
 )
 
-executable(rxvtname + 'd', 'rxvtd.C', 'rxvtdaemon.C',
-  include_directories: config_inc,
-  link_with: common,
-  link_args: supcxx_args,
-  link_language: link_language,
-  dependencies: base_deps + x_deps,
-  install: true,
-)
+# The daemon and its client are optional (-Ddaemon=false).
+if get_option('daemon')
+  executable(rxvtname + 'd', 'rxvtd.C', 'rxvtdaemon.C',
+    include_directories: config_inc,
+    link_with: common,
+    link_args: supcxx_args,
+    link_language: link_language,
+    dependencies: base_deps + x_deps,
+    install: true,
+  )
 
-# The client only talks to the daemon over a socket, so it needs no X.
-executable(rxvtname + 'c', 'rxvtc.C', 'rxvtdaemon.C',
-  include_directories: config_inc,
-  link_args: supcxx_args,
-  link_language: link_language,
-  dependencies: base_deps,
-  install: true,
-)
+  # The client only talks to the daemon over a socket, so it needs no X.
+  executable(rxvtname + 'c', 'rxvtc.C', 'rxvtdaemon.C',
+    include_directories: config_inc,
+    link_args: supcxx_args,
+    link_language: link_language,
+    dependencies: base_deps,
+    install: true,
+  )
+endif
 
 executable('urclock', 'rclock.C',
   include_directories: config_inc,
