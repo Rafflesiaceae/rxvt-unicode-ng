@@ -61,6 +61,29 @@ struct lua_binding
 };
 static vector<lua_binding> bindings;
 
+// overlay boxes created with t:new_overlay, like the overlay objects of
+// perl. The shown ones are swapped into the screen around every refresh.
+struct lua_overlay
+{
+  rxvt_term *term; // 0 once closed
+  int x, y, w, h;  // position as given, size including the border
+  bool border;
+  rend_t rstyle;   // default rendition
+  text_t **text;
+  rend_t **rend;
+  bool shown;
+  int self_ref;    // keeps shown overlays alive, 0 if hidden
+
+  // the area swapped into the screen by the refresh in progress, if any
+  bool swapped;
+  int sx, sy, sw, sh, sview;
+
+  void swap ();
+  void close (lua_State *L);
+};
+// all open overlays, the shown ones are drawn in this order
+static vector<lua_overlay *> overlays;
+
 // cells changed by t:highlight, restored after the refresh
 struct saved_rend
 {
@@ -477,11 +500,30 @@ t_prompt_jump (lua_State *L)
   return 1;
 }
 
-// t:cursor () -> row, col
+// t:cursor ([row, col]) -> row, col
+// The cursor position, the cursor is moved first if row and col are given.
+// Like perl's screen_cur, rows in the scrollback are allowed, program output
+// would go there as well, so pause the pty (t:pty_events) while it is there.
 static int
 t_cursor (lua_State *L)
 {
   rxvt_term *term = check_term (L);
+
+  if (!lua_isnoneornil (L, 2))
+    {
+      int row = luaL_checkinteger (L, 2);
+      int col = luaL_checkinteger (L, 3);
+
+      clamp_it (row, term->top_row, term->nrow - 1);
+      clamp_it (col, 0, term->ncol - 1);
+
+      term->screen.cur.row = row;
+      term->screen.cur.col = col;
+      // like any explicit cursor movement, this cancels a pending wrap
+      term->screen.flags &= ~Screen_WrapNext;
+      term->want_refresh = 1;
+    }
+
   lua_pushinteger (L, term->screen.cur.row);
   lua_pushinteger (L, term->screen.cur.col);
   return 2;
@@ -567,6 +609,65 @@ t_col (lua_State *L)
   return 1;
 }
 
+// number of cells of a row as part of its logical line: all columns for
+// rows that continue on the next row (like perl's ROW_l), otherwise the
+// columns that contain text
+static int
+line_cells (rxvt_term *term, line_t &l)
+{
+  return l.is_longer () ? term->ncol : row_len (term, l);
+}
+
+// t:line_bounds (row) -> beg, end, len
+// The first and last row of the logical line that row is part of, and its
+// length in cells, like perl's line object. Offsets into the line are
+// (row - beg) * t:ncol () + col.
+static int
+t_line_bounds (lua_State *L)
+{
+  rxvt_term *term = check_term (L);
+  int row = luaL_checkinteger (L, 2);
+  check_row (L, term, 2);
+
+  int beg = row, end = row;
+
+  while (beg > term->top_row && ROW_of (term, beg - 1).is_longer ())
+    beg--;
+
+  while (end < term->nrow - 1 && ROW_of (term, end).is_longer ())
+    end++;
+
+  lua_pushinteger (L, beg);
+  lua_pushinteger (L, end);
+  lua_pushinteger (L, (end - beg) * term->ncol + line_cells (term, ROW_of (term, end)));
+  return 3;
+}
+
+// t:cells (row) -> { cell, ... }
+// The UTF-8 text of every cell of a row, one table entry per column, so
+// that column col is at index col + 1. The second column of wide characters
+// is "". Rows that continue on the next row have t:ncol () cells, the
+// others as many as they contain text, so the cells of the rows of a
+// logical line concatenate to t:line_bounds offsets.
+static int
+t_cells (lua_State *L)
+{
+  rxvt_term *term = check_term (L);
+  line_t &l = check_row (L, term, 2);
+  int len = line_cells (term, l);
+
+  lua_createtable (L, len, 0);
+
+  for (int col = 0; col < len; col++)
+    {
+      char buf[CELL_UTF8_MAX];
+      lua_pushlstring (L, buf, cell_utf8 (l.t[col], buf));
+      lua_rawseti (L, -2, col + 1);
+    }
+
+  return 1;
+}
+
 // t:rend (row, c0, c1, and_mask, or_mask)
 // Permanently changes the rendition of the columns [c0, c1) of a row until
 // the line changes again, use it in on_line_update.
@@ -624,6 +725,117 @@ t_highlight (lua_State *L)
   return 0;
 }
 
+// XORs mask into the renditions of the columns [c0, c1) of a visible row
+// for the refresh in progress, the cells are restored like highlights.
+static void
+xor_cells (rxvt_term *term, int row, int c0, int c1, rend_t mask)
+{
+  line_t &l = ROW_of (term, row);
+
+  // font bits are never touched, like in apply_rend
+  mask &= ~RS_fontMask;
+
+  for (int col = c0; col < c1; col++)
+    {
+      saved_rend saved = { row, col, l.r[col] };
+      highlights.push_back (saved);
+
+      rend_t r = l.r[col] ^ mask;
+
+      if (GET_STYLE (r) != GET_STYLE (l.r[col]))
+        r = SET_FONT (r, FONTSET_of (term, r)->find_font (l.t[col]));
+
+      l.r[col] = r;
+    }
+}
+
+// Reads the r0, c0, r1, c1 arguments of t:xor_span/t:xor_rect, raising an
+// error outside of on_refresh_begin. Returns false if no row is visible.
+static bool
+check_xor_args (lua_State *L, rxvt_term *term, int &r0, int &c0, int &r1, int &c1)
+{
+  r0 = luaL_checkinteger (L, 2);
+  c0 = luaL_checkinteger (L, 3);
+  r1 = luaL_checkinteger (L, 4);
+  c1 = luaL_checkinteger (L, 5);
+
+  if (refresh_term != term)
+    luaL_error (L, "only allowed in on_refresh_begin");
+
+  clamp_it (c0, 0, term->ncol);
+  clamp_it (c1, 0, term->ncol);
+
+  return r0 < term->view_start + term->nrow && r1 >= term->view_start;
+}
+
+// t:xor_span (r0, c0, r1, c1 [, mask]) - like perl's scr_xor_span, XORs
+// mask (default urxvt.RS_RVid) into the renditions from (r0, c0) up to,
+// but not including, (r1, c1), rows in between are covered completely.
+// Like t:highlight, it is only allowed in on_refresh_begin and undone
+// after the refresh.
+static int
+t_xor_span (lua_State *L)
+{
+  rxvt_term *term = check_term (L);
+  int r0, c0, r1, c1;
+
+  if (!check_xor_args (L, term, r0, c0, r1, c1))
+    return 0;
+
+  rend_t mask = check_rend (L, 6, RS_RVid);
+  int view_end = term->view_start + term->nrow; // exclusive
+
+  // only the visible part is changed
+  if (r0 < term->view_start)
+    r0 = term->view_start, c0 = 0;
+  if (r1 >= view_end)
+    r1 = view_end - 1, c1 = term->ncol;
+
+  for (int row = r0; row <= r1; row++)
+    xor_cells (term, row, row == r0 ? c0 : 0, row == r1 ? c1 : term->ncol, mask);
+
+  return 0;
+}
+
+// t:xor_rect (r0, c0, r1, c1 [, mask1 [, mask2]]) - like perl's
+// scr_xor_rect, XORs mask1 (default urxvt.RS_RVid) into the columns
+// [c0, c1) of the rows r0 to r1 (inclusive), and mask2 (default
+// urxvt.RS_RVid + urxvt.RS_Uline) into the trailing blanks of each row but
+// the first one, which is how urxvt shows rectangular selections. Only
+// allowed in on_refresh_begin, undone after the refresh.
+static int
+t_xor_rect (lua_State *L)
+{
+  rxvt_term *term = check_term (L);
+  int r0, c0, r1, c1;
+
+  if (!check_xor_args (L, term, r0, c0, r1, c1))
+    return 0;
+
+  rend_t mask1 = check_rend (L, 6, RS_RVid);
+  rend_t mask2 = check_rend (L, 7, RS_RVid | RS_Uline);
+
+  max_it (r0, term->view_start);
+  min_it (r1, term->view_start + term->nrow - 1);
+
+  for (int row = r0; row <= r1; row++)
+    {
+      text_t *t = ROW_of (term, row).t;
+
+      xor_cells (term, row, c0, c1, mask1);
+
+      // the trailing blanks, as in scr_xor_rect
+      int col = c1;
+      while (col > c0 && (t[col - 1] == NOCHAR || unicode::is_space (t[col - 1])))
+        col--;
+
+      // scr_xor_rect XORs the first blank twice, i.e. not at all
+      xor_cells (term, row, col + 1, c1, mask2);
+    }
+
+  return 0;
+}
+
 // t:write (data) - sends data to the program, as if it was typed
 static int
 t_write (lua_State *L)
@@ -657,6 +869,25 @@ t_refresh (lua_State *L)
   term->want_refresh = 1;
   term->refresh_check ();
   return 0;
+}
+
+// t:pty_events ([events]) -> previous events
+// Like perl's pty_ev_events, the I/O events (urxvt.EV_READ, urxvt.EV_WRITE)
+// urxvt waits for on the pty, changed to events if given. urxvt.EV_NONE
+// pauses the program output until the old events are restored. Writes to
+// the program that can't be sent at once resume it, as urxvt then waits
+// for the pty to become writable (and readable) again.
+static int
+t_pty_events (lua_State *L)
+{
+  rxvt_term *term = check_term (L);
+  int old = term->pty_ev.events;
+
+  if (!lua_isnoneornil (L, 2))
+    term->pty_ev.set (luaL_checkinteger (L, 2));
+
+  lua_pushinteger (L, old);
+  return 1;
 }
 
 // t:overlay (x, y, w, h) - opens the overlay window (there is only one),
@@ -711,6 +942,291 @@ t_overlay_off (lua_State *L)
   return 0;
 }
 
+/////////////////////////////////////////////////////////////////////////////
+// overlay objects
+
+// Exchanges the overlay contents with the screen cells below it: called
+// once to show it at the start of a refresh, and again at its end to
+// restore the screen, like perl's overlay::swap.
+void
+lua_overlay::swap ()
+{
+  if (!swapped)
+    {
+      // negative positions count from the right/bottom, and the position
+      // follows size changes of the terminal
+      sx = max (0, min (MOD (x, term->ncol), term->ncol - w));
+      sy = max (0, min (MOD (y, term->nrow), term->nrow - h));
+      sw = min (w, term->ncol - sx);
+      sh = min (h, term->nrow - sy);
+      sview = term->view_start;
+
+      // the cursor would be drawn on top of the overlay, hide it for this
+      // refresh (scr_refresh restores the flags afterwards)
+      if (IN_RANGE_EXC (term->screen.cur.col - sx, 0, sw)
+          && IN_RANGE_EXC (term->screen.cur.row - sview - sy, 0, sh))
+        term->screen.flags &= ~Screen_VisibleCursor;
+    }
+
+  for (int row = 0; row < sh; row++)
+    {
+      line_t &l = ROW_of (term, sview + sy + row);
+      text_t *t1 = text[row], *t2 = l.t + sx;
+      rend_t *r1 = rend[row], *r2 = l.r + sx;
+
+      for (int col = 0; col < sw; col++)
+        {
+          text_t t = t1[col]; t1[col] = t2[col]; t2[col] = t;
+          rend_t r = r1[col]; r1[col] = r2[col];
+          r2[col] = SET_FONT (r, FONTSET_of (term, r)->find_font (t));
+        }
+    }
+
+  swapped = !swapped;
+}
+
+// Hides the overlay and frees its contents, overlays can't be used after.
+void
+lua_overlay::close (lua_State *L)
+{
+  if (!term)
+    return;
+
+  // restore the screen if this happens during a refresh
+  if (swapped)
+    swap ();
+
+  term->want_refresh = 1;
+
+  if (self_ref)
+    luaL_unref (L, LUA_REGISTRYINDEX, self_ref);
+
+  for (int row = 0; row < h; row++)
+    {
+      delete [] text[row];
+      delete [] rend[row];
+    }
+
+  delete [] text;
+  delete [] rend;
+
+  for (unsigned int i = 0; i < overlays.size (); i++)
+    if (overlays[i] == this)
+      {
+        overlays.erase (overlays.begin () + i);
+        break;
+      }
+
+  term = 0;
+}
+
+// Swaps the shown overlays of term into the screen (in is true) or back,
+// in reverse order, so overlapping overlays restore the screen properly.
+static void
+swap_overlays (rxvt_term *term, bool in)
+{
+  int n = overlays.size ();
+
+  for (int i = 0; i < n; i++)
+    {
+      lua_overlay *ov = overlays[in ? i : n - 1 - i];
+
+      if (ov->term == term && (in ? ov->shown : ov->swapped))
+        ov->swap ();
+    }
+}
+
+static lua_overlay *
+check_overlay (lua_State *L)
+{
+  lua_overlay *ov = (lua_overlay *)luaL_checkudata (L, 1, "urxvt.overlay");
+
+  if (!ov->term)
+    luaL_error (L, "overlay has been closed");
+
+  return ov;
+}
+
+// t:new_overlay (x, y, w, h [, border [, and_mask, or_mask]]) -> overlay
+// Creates a hidden overlay box of w x h cells at column x and row y of the
+// window, negative values count from the right/bottom. There is a border
+// around it (taking another cell on each side) unless border is false.
+// The masks change the default overlay rendition (black on yellow).
+static int
+t_new_overlay (lua_State *L)
+{
+  rxvt_term *term = check_term (L);
+  int x = luaL_checkinteger (L, 2);
+  int y = luaL_checkinteger (L, 3);
+  int w = max (0, (int)luaL_checkinteger (L, 4));
+  int h = max (0, (int)luaL_checkinteger (L, 5));
+  bool border = lua_isnoneornil (L, 6) || lua_toboolean (L, 6);
+  rend_t and_mask = check_rend (L, 7, ~(rend_t)0);
+  rend_t or_mask  = check_rend (L, 8, 0);
+
+  if (border)
+    w += 2, h += 2;
+
+  lua_overlay *ov = (lua_overlay *)lua_newuserdata (L, sizeof (lua_overlay));
+  memset (ov, 0, sizeof (*ov));
+  luaL_getmetatable (L, "urxvt.overlay");
+  lua_setmetatable (L, -2);
+
+  ov->term = term;
+  ov->x = x, ov->y = y, ov->w = w, ov->h = h;
+  ov->border = border;
+  ov->rstyle = (OVERLAY_RSTYLE & (and_mask | RS_fontMask)) | (or_mask & ~RS_fontMask);
+  ov->text = new text_t *[h];
+  ov->rend = new rend_t *[h];
+
+  for (int row = 0; row < h; row++)
+    {
+      text_t *tp = ov->text[row] = new text_t[w];
+      rend_t *rp = ov->rend[row] = new rend_t[w];
+
+      for (int col = 0; col < w; col++)
+        {
+          text_t t = ' ';
+
+          // the same box drawing characters as the builtin overlay
+          if (border)
+            {
+              bool left = col == 0, right = col == w - 1;
+
+              if (row == 0)
+                t = left ? 0x2554 : right ? 0x2557 : 0x2550;
+              else if (row == h - 1)
+                t = left ? 0x255a : right ? 0x255d : 0x2550;
+              else if (left || right)
+                t = 0x2551;
+            }
+
+          tp[col] = t;
+          rp[col] = ov->rstyle;
+        }
+    }
+
+  overlays.push_back (ov);
+  return 1;
+}
+
+// overlay:set (x, y, text [, and_mask, or_mask]) - writes text at column x
+// of row y, inside of the border. The masks change the default rendition of
+// the overlay, without them the rendition of the cells stays as it was.
+static int
+overlay_set (lua_State *L)
+{
+  lua_overlay *ov = check_overlay (L);
+  int b = ov->border;
+  int x = luaL_checkinteger (L, 2) + b;
+  int y = luaL_checkinteger (L, 3) + b;
+  const char *text = luaL_checkstring (L, 4);
+  bool have_rend = !lua_isnoneornil (L, 5) || !lua_isnoneornil (L, 6);
+  rend_t and_mask = check_rend (L, 5, ~(rend_t)0);
+  rend_t or_mask  = check_rend (L, 6, 0);
+  rend_t rend = (ov->rstyle & (and_mask | RS_fontMask)) | (or_mask & ~RS_fontMask);
+
+  if (!IN_RANGE_EXC (y, b, ov->h - b))
+    return 0;
+
+  wchar_t *wtext = rxvt_utf8towcs (text);
+
+  for (wchar_t *s = wtext; *s; s++)
+    {
+      text_t t = *s;
+      int width = WCWIDTH (t);
+
+      // wide characters continue with NOCHAR cells, like on the screen
+      for (; width > 0; width--, x++, t = NOCHAR)
+        if (IN_RANGE_EXC (x, b, ov->w - b))
+          {
+            ov->text[y][x] = t;
+            if (have_rend)
+              ov->rend[y][x] = rend;
+          }
+    }
+
+  free (wtext);
+
+  if (ov->shown)
+    {
+      ov->term->want_refresh = 1;
+      ov->term->refresh_check ();
+    }
+
+  return 0;
+}
+
+// overlay:show () - shows the overlay on top of the other overlays. Shown
+// overlays stay visible without references, until hidden or closed.
+static int
+overlay_show (lua_State *L)
+{
+  lua_overlay *ov = check_overlay (L);
+
+  // move it to the end, so it is drawn last
+  for (unsigned int i = 0; i < overlays.size (); i++)
+    if (overlays[i] == ov)
+      {
+        overlays.erase (overlays.begin () + i);
+        break;
+      }
+
+  overlays.push_back (ov);
+
+  if (!ov->shown)
+    {
+      ov->shown = true;
+      lua_pushvalue (L, 1);
+      ov->self_ref = luaL_ref (L, LUA_REGISTRYINDEX);
+    }
+
+  // overlays are drawn by the refresh hooks
+  rxvt_lua.should_invoke[HOOK_REFRESH_BEGIN] = 1;
+  rxvt_lua.should_invoke[HOOK_REFRESH_END] = 1;
+
+  ov->term->want_refresh = 1;
+  ov->term->refresh_check ();
+  return 0;
+}
+
+// overlay:hide ()
+static int
+overlay_hide (lua_State *L)
+{
+  lua_overlay *ov = check_overlay (L);
+
+  if (ov->shown)
+    {
+      ov->shown = false;
+      luaL_unref (L, LUA_REGISTRYINDEX, ov->self_ref);
+      ov->self_ref = 0;
+
+      ov->term->want_refresh = 1;
+      ov->term->refresh_check ();
+    }
+
+  return 0;
+}
+
+// overlay:close () - hides the overlay for good and frees it, closing it
+// again does nothing
+static int
+overlay_close (lua_State *L)
+{
+  lua_overlay *ov = (lua_overlay *)luaL_checkudata (L, 1, "urxvt.overlay");
+  ov->close (L);
+  return 0;
+}
+
+static const luaL_Reg overlay_methods[] = {
+  { "set",   overlay_set   },
+  { "show",  overlay_show  },
+  { "hide",  overlay_hide  },
+  { "close", overlay_close },
+  { 0, 0 }
+};
+
 // t:selection ([clipboard]) -> the selected (or clipboard) text, or nil
 static int
 t_selection (lua_State *L)
@@ -747,12 +1263,144 @@ t_set_selection (lua_State *L)
   return 1;
 }
 
+// optional X event time argument, e.g. ev.time, CurrentTime if omitted
+static Time
+check_time (lua_State *L, int idx)
+{
+  return lua_isnoneornil (L, idx) ? CurrentTime : (Time)luaL_checknumber (L, idx);
+}
+
+// Implements t:selection_beg/end/mark ([row, col]) -> row, col, which get
+// or set the corners and the mark of the selection like perl's methods of
+// the same names (followed by t:selection_make to select the text).
+static int
+selection_point (lua_State *L, int which)
+{
+  rxvt_term *term = check_term (L);
+  row_col_t &rc = which == 0 ? term->selection.beg
+                : which == 1 ? term->selection.end
+                :              term->selection.mark;
+
+  if (!lua_isnoneornil (L, 2))
+    {
+      rc.row = luaL_checkinteger (L, 2);
+      rc.col = luaL_checkinteger (L, 3);
+
+      // the end is exclusive, the same adjustments as in perl
+      if (which == 1)
+        {
+          if (rc.col == 0)
+            {
+              // col 0 means the end of the previous row
+              rc.row--;
+              rc.col = term->ncol;
+            }
+          else if (IN_RANGE_EXC (rc.row, term->top_row, term->nrow)
+                   && rc.col > ROW_of (term, rc.row).l)
+            {
+              // beyond the text means the whole row, including its newline
+              rc.col = term->ncol;
+            }
+        }
+
+      clamp_it (rc.col, 0, term->ncol);
+      clamp_it (rc.row, term->top_row, term->nrow - 1);
+
+      term->selection.screen = term->current_screen;
+      term->selection_changed ();
+      term->refresh_check ();
+    }
+
+  lua_pushinteger (L, rc.row);
+  lua_pushinteger (L, rc.col);
+  return 2;
+}
+
+static int t_selection_beg  (lua_State *L) { return selection_point (L, 0); }
+static int t_selection_end  (lua_State *L) { return selection_point (L, 1); }
+static int t_selection_mark (lua_State *L) { return selection_point (L, 2); }
+
+// t:selection_make ([rect [, time]]) - selects the text between
+// t:selection_beg and t:selection_end (a rectangle if rect is true) like a
+// selection made with the mouse, and claims the PRIMARY selection
+static int
+t_selection_make (lua_State *L)
+{
+  rxvt_term *term = check_term (L);
+
+  term->selection.op = SELECTION_CONT;
+  term->selection.rect = lua_toboolean (L, 2);
+  term->selection_make (check_time (L, 3));
+  return 0;
+}
+
+// t:selection_grab ([clipboard [, time]]) -> whether the PRIMARY (or
+// CLIPBOARD) selection could be claimed with the current text
+static int
+t_selection_grab (lua_State *L)
+{
+  rxvt_term *term = check_term (L);
+  lua_pushboolean (L, term->selection_grab (check_time (L, 3), lua_toboolean (L, 2)));
+  return 1;
+}
+
+// t:selection_clear ([clipboard]) - forgets the PRIMARY text and removes
+// the highlight of the selection (or forgets the CLIPBOARD text)
+static int
+t_selection_clear (lua_State *L)
+{
+  check_term (L)->selection_clear (lua_toboolean (L, 2));
+  return 0;
+}
+
+// t:selection_request ([clipboard [, time]]) - pastes the PRIMARY (or
+// CLIPBOARD) selection into the program, like a middle click (Shift-Insert)
+static int
+t_selection_request (lua_State *L)
+{
+  rxvt_term *term = check_term (L);
+  term->selection_request (check_time (L, 3), lua_toboolean (L, 2) ? Sel_Clipboard : Sel_Primary);
+  return 0;
+}
+
 // t:resource (name) -> value of the X resource URxvt.<name>, or nil
 static int
 t_resource (lua_State *L)
 {
   rxvt_term *term = check_term (L);
   lua_pushstring (L, term->x_resource (luaL_checkstring (L, 2)));
+  return 1;
+}
+
+// t:resource_boolean (name) -> true or false, nil if the resource is not
+// set. Like perl's x_resource_boolean, "true", "yes", "on" and "1" (in any
+// case, surrounding blanks are ignored) are true, anything else is false.
+static int
+t_resource_boolean (lua_State *L)
+{
+  rxvt_term *term = check_term (L);
+  const char *value = term->x_resource (luaL_checkstring (L, 2));
+
+  if (!value)
+    {
+      lua_pushnil (L);
+      return 1;
+    }
+
+  while (isspace ((unsigned char)*value))
+    value++;
+
+  int len = strlen (value);
+  while (len && isspace ((unsigned char)value[len - 1]))
+    len--;
+
+  static const char *const yes[] = { "true", "yes", "on", "1" };
+  bool result = false;
+
+  for (unsigned int i = 0; i < ecb_array_length (yes); i++)
+    result |= len == (int)strlen (yes[i]) && !strncasecmp (value, yes[i], len);
+
+  lua_pushboolean (L, result);
   return 1;
 }
 
@@ -771,19 +1419,33 @@ static const luaL_Reg term_methods[] = {
   { "window",        t_window        },
   { "line",          t_line          },
   { "col",           t_col           },
+  { "line_bounds",   t_line_bounds   },
+  { "cells",         t_cells         },
   { "rend",          t_rend          },
   { "highlight",     t_highlight     },
+  { "xor_span",      t_xor_span      },
+  { "xor_rect",      t_xor_rect      },
   { "write",         t_write         },
 #if defined (KEYSYM_RESOURCE)
   { "feed",          t_feed          },
 #endif
   { "refresh",       t_refresh       },
+  { "pty_events",    t_pty_events    },
   { "overlay",       t_overlay       },
   { "overlay_text",  t_overlay_text  },
   { "overlay_off",   t_overlay_off   },
+  { "new_overlay",   t_new_overlay   },
   { "selection",     t_selection     },
   { "set_selection", t_set_selection },
+  { "selection_beg", t_selection_beg },
+  { "selection_end", t_selection_end },
+  { "selection_mark", t_selection_mark },
+  { "selection_make", t_selection_make },
+  { "selection_grab", t_selection_grab },
+  { "selection_clear", t_selection_clear },
+  { "selection_request", t_selection_request },
   { "resource",      t_resource      },
+  { "resource_boolean", t_resource_boolean },
   { 0, 0 }
 };
 
@@ -1261,12 +1923,40 @@ create_state (rxvt_term *term, const char *dir, char **plugins)
   lua_setfield (L, -2, "__gc");
   lua_pop (L, 1);
 
+  luaL_newmetatable (L, "urxvt.overlay");
+  lua_newtable (L);
+  luaL_register (L, 0, overlay_methods);
+  lua_setfield (L, -2, "__index");
+  lua_pushcfunction (L, overlay_close);
+  lua_setfield (L, -2, "__gc");
+  lua_pop (L, 1);
+
   // the global urxvt module, also available via require "urxvt"
   luaL_register (L, "urxvt", urxvt_functions);
   lua_pushstring (L, VERSION);
   lua_setfield (L, -2, "version");
   lua_pushstring (L, dir);
   lua_setfield (L, -2, "plugin_dir");
+
+  // constants of the perl interface, for t:pty_events and t:xor_span/rect
+  static const struct { const char *name; lua_Number value; } constants[] = {
+    { "EV_NONE",   ev::NONE  },
+    { "EV_READ",   ev::READ  },
+    { "EV_WRITE",  ev::WRITE },
+    { "RS_Bold",   RS_Bold   },
+    { "RS_Italic", RS_Italic },
+    { "RS_Blink",  RS_Blink  },
+    { "RS_RVid",   RS_RVid   },
+    { "RS_Uline",  RS_Uline  },
+    { "RS_Sel",    RS_Sel    },
+  };
+
+  for (unsigned int i = 0; i < ecb_array_length (constants); i++)
+    {
+      lua_pushnumber (L, constants[i].value);
+      lua_setfield (L, -2, constants[i].name);
+    }
+
   lua_pop (L, 1);
 
   // plugins can keep helper modules in plugins/lib, which is not autoloaded
@@ -1409,6 +2099,9 @@ rxvt_lua_interp::invoke (rxvt_term *term, int htype, ...)
   // pre-handling
   if (htype == HOOK_REFRESH_BEGIN)
     refresh_term = term;
+  else if (htype == HOOK_REFRESH_END)
+    // the plugins see the screen without the overlays again
+    swap_overlays (term, false);
   else if (htype == HOOK_START && should_invoke[HOOK_MOTION_NOTIFY])
     {
       term->vt_emask_perl |= PointerMotionMask;
@@ -1476,7 +2169,10 @@ rxvt_lua_interp::invoke (rxvt_term *term, int htype, ...)
   lua_settop (L, base);
 
   // post-handling
-  if (htype == HOOK_REFRESH_END)
+  if (htype == HOOK_REFRESH_BEGIN)
+    // after the highlights of the plugins, so they are not drawn on top
+    swap_overlays (term, true);
+  else if (htype == HOOK_REFRESH_END)
     {
       // restore in reverse order, so overlapping highlights end up with
       // the original rendition
@@ -1488,6 +2184,14 @@ rxvt_lua_interp::invoke (rxvt_term *term, int htype, ...)
     }
   else if (htype == HOOK_DESTROY)
     {
+      // overlays can't outlive their terminal, closing removes them from
+      // the list, so search from the start again each time
+      for (unsigned int i = 0; i < overlays.size (); )
+        if (overlays[i]->term == term)
+          overlays[i]->close (L);
+        else
+          i++;
+
       // invalidate the object, plugins might still hold references to it
       lua_rawgeti (L, LUA_REGISTRYINDEX, term->lua.ref);
       lua_pushnil (L);

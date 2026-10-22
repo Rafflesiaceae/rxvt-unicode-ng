@@ -128,23 +128,65 @@ arguments are listed after `t`. X events (`ev`) are tables with `type`,
 | `t:prompt_marker (row [, marked])` | whether a row has a prompt marker; pass a boolean to set or clear it |
 | `t:prompt_markers ()` | table of marked row numbers, oldest first, including visible rows |
 | `t:prompt_jump (direction)` | jumps to the previous marker for negative directions, the next for positive directions, or does nothing for zero; returns `view_start`. After the newest marker it returns to the live screen. Navigation does nothing on the alternate screen. |
-| `t:cursor ()` | cursor `row, col` |
+| `t:cursor ([row, col])` | cursor `row, col`, moves the cursor first if `row` and `col` are given. Rows in the scrollback are allowed (like perl's `screen_cur`), pause the program with `t:pty_events` while the cursor is there, as its output would go there too |
 | `t:focus ()` | whether the window has the focus |
 | `t:font_size ()` | `width, height` of a character cell in pixels |
 | `t:window ()` | X window id |
 | `t:line (row)` | `text, wrapped`, where `wrapped` tells whether the line continues on the next row |
 | `t:col (row, byte)` | column of the character at a 1-based byte offset of `t:line (row)` |
+| `t:line_bounds (row)` | `beg, end, len` of the logical line that `row` is part of (it may be wrapped over several rows), `len` in cells. Offsets into it are `(row - beg) * t:ncol () + col`, like perl's line objects |
+| `t:cells (row)` | table with the UTF-8 text of each cell of a row, column `col` at index `col + 1`, `""` for the second column of wide characters. Rows that continue on the next row have `t:ncol ()` cells, so the cells of the rows `beg` to `end` together are the `len` cells of the logical line |
 | `t:rend (row, c0, c1, and_mask, or_mask)` | changes the rendition of columns `[c0, c1)` until the line changes again |
 | `t:highlight (row, c0, c1, and_mask, or_mask)` | like `t:rend`, but only for the current redraw (only allowed in `on_refresh_begin`) |
+| `t:xor_span (r0, c0, r1, c1 [, mask])` | XORs `mask` (default `urxvt.RS_RVid`) into the renditions from `(r0, c0)` to `(r1, c1)` (exclusive), the rows in between completely, like perl's `scr_xor_span`. Like `t:highlight`, only allowed in `on_refresh_begin` and undone after the redraw |
+| `t:xor_rect (r0, c0, r1, c1 [, mask1 [, mask2]])` | the same for the columns `[c0, c1)` of the rows `r0` to `r1`, `mask2` (default `RS_RVid + RS_Uline`) goes to the trailing blanks but the first, like rectangular selections and perl's `scr_xor_rect` |
 | `t:overlay (x, y, w, h)` | opens the overlay box (there is one per terminal), negative `x`/`y` count from the right/bottom, the border adds one cell on each side |
 | `t:overlay_text (x, y, text [, and_mask, or_mask])` | writes into the overlay |
 | `t:overlay_off ()` | closes the overlay |
+| `t:new_overlay (x, y, w, h [, border [, and_mask, or_mask]])` | a new overlay object, see below |
 | `t:write (data)` | sends data to the program, as if typed |
 | `t:feed (data)` | processes data as if the program had output it |
 | `t:refresh ()` | schedules a redraw, needed after changes outside of hooks, e.g. in timers |
+| `t:pty_events ([events])` | the events (`urxvt.EV_READ`, `urxvt.EV_WRITE`) urxvt waits for on the pty, changed first if given. `urxvt.EV_NONE` pauses the program output until the returned old value is restored. Writes to the program that can't be sent at once (keys that are not consumed, `t:write`) resume it, consume them with `on_tt_write` while paused |
 | `t:selection ([clipboard])` | the PRIMARY (or CLIPBOARD) selection text, or nil |
 | `t:set_selection (text [, clipboard])` | sets and claims the selection |
+| `t:selection_beg ([row, col])`, `t:selection_end (...)`, `t:selection_mark (...)` | the start, the (exclusive) end and the mark of the selection, set first if given. Like in perl, an end column 0 means the end of the previous row, and columns beyond the text of the row the whole row including its newline |
+| `t:selection_make ([rect [, time]])` | selects the text between `selection_beg` and `selection_end` (a rectangle if `rect` is true) like the mouse does, and claims PRIMARY |
+| `t:selection_grab ([clipboard [, time]])` | claims PRIMARY (or CLIPBOARD) with the current text, returns whether that worked |
+| `t:selection_clear ([clipboard])` | forgets the PRIMARY text and removes the selection highlight (or forgets the CLIPBOARD text) |
+| `t:selection_request ([clipboard [, time]])` | pastes PRIMARY (or CLIPBOARD) into the program |
 | `t:resource (name)` | the X resource `URxvt.<name>`, or nil |
+| `t:resource_boolean (name)` | the X resource as a boolean: true for `true`, `yes`, `on` and `1` (in any case), false otherwise, nil if it is not set |
+
+The optional `time` arguments are X event times, e.g. `ev.time` of a key
+event, and default to `CurrentTime`.
+
+### Overlays
+
+`t:overlay` shows a single box with a border, like urxvt's own popups.
+`t:new_overlay` creates overlay objects like the perl `overlay` method: any
+number of them, with or without border, and with their own colors. They
+start hidden, `x`/`y` are window columns/rows, negative ones count from the
+right/bottom (`-1, -1` is the bottom right corner), and the position follows
+size changes. The border takes another cell on each side.
+
+| method | description |
+|---|---|
+| `ov:set (x, y, text [, and_mask, or_mask])` | writes text at a cell inside the border, the masks change the default rendition of the overlay, without them the cells keep their rendition |
+| `ov:show ()` | shows it on top of the other overlays |
+| `ov:hide ()` | |
+| `ov:close ()` | hides it and frees it, it can't be used afterwards |
+
+Shown overlays stay visible until they are hidden or closed, even without
+references. Hidden ones are freed when they are garbage collected, and all
+of them when the terminal goes away.
+
+```lua
+-- a one line status box in the bottom right corner, without border
+local status = t:new_overlay (-1, -1, 12, 1, false)
+status:set (0, 0, "-- SELECT --")
+status:show ()
+```
 
 ### Detecting alternate-screen applications
 
@@ -206,5 +248,7 @@ and styling plugins do not overwrite them.
 | `urxvt.keysym_name (keysym)` | e.g. `"Return"` |
 | `urxvt.warn (msg)` | prints to stderr |
 | `urxvt.version`, `urxvt.plugin_dir` | |
+| `urxvt.EV_NONE`, `EV_READ`, `EV_WRITE` | for `t:pty_events` |
+| `urxvt.RS_Bold`, `RS_Italic`, `RS_Blink`, `RS_RVid`, `RS_Uline`, `RS_Sel` | rendition bits, e.g. for `t:xor_span`. urxvt draws selections with `RS_Sel + RS_RVid`: reversed, or in `highlightColor`/`highlightTextColor` instead if those are set |
 
 The LuaJIT `ffi` and `jit` modules are available as usual.
