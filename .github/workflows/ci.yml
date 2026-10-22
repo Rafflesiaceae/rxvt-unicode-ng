@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# Every job below is independent and they all start at the same time, one
+# failing platform must not cancel the results of the others.
+jobs:
+  native:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            meson ninja-build pkg-config libptytty-dev \
+            libx11-dev libxft-dev libxrender-dev libxrandr-dev libxmu-dev \
+            libfontconfig-dev libgdk-pixbuf-2.0-dev libstartup-notification0-dev \
+            libluajit-5.1-dev libpcre2-dev
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        # libptytty is built from source by the script, Homebrew lacks it.
+        run: |
+          brew install meson ninja pkgconf cmake \
+            libx11 libxft libxrender libxrandr libxmu pcre2 luajit
+
+      - name: Build
+        run: .github/scripts/ci-build.sh
+
+  freebsd:
+    name: FreeBSD
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: vmactions/freebsd-vm@v1
+        with:
+          prepare: |
+            pkg install -y meson ninja pkgconf cmake curl \
+              libX11 libXft libXrender libXrandr libXmu pcre2 luajit
+          run: .github/scripts/ci-build.sh
+
+  openbsd:
+    name: OpenBSD
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: vmactions/openbsd-vm@v1
+        with:
+          prepare: |
+            pkg_add meson ninja pkgconf cmake curl pcre2 luajit
+          # The X libraries are part of the base system, not of /usr/local.
+          run: |
+            export PKG_CONFIG_PATH=/usr/X11R6/lib/pkgconfig
+            .github/scripts/ci-build.sh
+
+  netbsd:
+    name: NetBSD
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: vmactions/netbsd-vm@v1
+        with:
+          prepare: |
+            /usr/sbin/pkg_add meson ninja-build pkg-config cmake curl pcre2 luajit
+          # pkgsrc lives in /usr/pkg, the X libraries in /usr/X11R7.
+          run: |
+            export PATH=/usr/pkg/bin:/usr/pkg/sbin:$PATH
+            export PKG_CONFIG_PATH=/usr/pkg/lib/pkgconfig:/usr/X11R7/lib/pkgconfig
+            .github/scripts/ci-build.sh
+
+  solaris:
+    name: Solaris
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: vmactions/solaris-vm@v1
+        with:
+          # The image that ships gcc/g++ from the Solaris Common Build Env.
+          release: "11.4-gcc"
+          prepare: |
+            pkg install \
+              developer/build/meson developer/build/ninja developer/build/cmake \
+              developer/build/pkg-config \
+              x11/library/libx11 x11/library/libxft x11/library/libxrender \
+              x11/library/libxrandr x11/library/libxmu
+          run: .github/scripts/ci-build.sh
