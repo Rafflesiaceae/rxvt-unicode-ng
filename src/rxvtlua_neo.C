@@ -33,6 +33,10 @@
 
 #include <lua.hpp>
 
+// urxvt.regex works on UTF-8 strings, the 8 bit library
+#define PCRE2_CODE_UNIT_WIDTH 8
+#include <pcre2.h>
+
 rxvt_lua_interp rxvt_lua;
 
 // hook names as seen by plugins, i.e. "on_" + the lowercased hook name
@@ -1760,8 +1764,291 @@ u_keysym_name (lua_State *L)
   return 1;
 }
 
+/////////////////////////////////////////////////////////////////////////////
+// regular expressions (PCRE2), the replacement for the perl regexes
+
+// a compiled pattern, the userdata of urxvt.regex objects
+struct lua_regex
+{
+  pcre2_code *code;
+  pcre2_match_data *md; // reused by every match, plugins are single threaded
+  uint32_t ncap;        // number of capture groups
+};
+
+static lua_regex *
+check_regex (lua_State *L)
+{
+  return (lua_regex *)luaL_checkudata (L, 1, "urxvt.regex");
+}
+
+static int
+regex_gc (lua_State *L)
+{
+  lua_regex *re = check_regex (L);
+
+  pcre2_match_data_free (re->md);
+  pcre2_code_free (re->code);
+  re->md = 0;
+  re->code = 0;
+
+  return 0;
+}
+
+// urxvt.regex (pattern [, flags]) -> regex
+// Compiles a perl compatible regular expression, raising an error if it is
+// invalid. flags is a string of perl modifiers: i (caseless), m (multiline),
+// s (dot matches newlines) and x (extended). Patterns and subjects are
+// UTF-8 with Unicode semantics, i.e. \w, \s, [[:upper:]] and caseless
+// matching know non-ASCII characters, like perl with character strings.
+// Invalid UTF-8 in subjects never matches, but is no error.
+static int
+u_regex (lua_State *L)
+{
+  size_t len;
+  const char *pattern = luaL_checklstring (L, 1, &len);
+  const char *flags = luaL_optstring (L, 2, "");
+  uint32_t options = PCRE2_UTF | PCRE2_UCP | PCRE2_MATCH_INVALID_UTF;
+
+  for (const char *f = flags; *f; f++)
+    switch (*f)
+      {
+        case 'i': options |= PCRE2_CASELESS;  break;
+        case 'm': options |= PCRE2_MULTILINE; break;
+        case 's': options |= PCRE2_DOTALL;    break;
+        case 'x': options |= PCRE2_EXTENDED;  break;
+        default:
+          return luaL_error (L, "invalid regex flag '%c'", *f);
+      }
+
+  // created before compiling, so __gc frees everything if anything fails
+  lua_regex *re = (lua_regex *)lua_newuserdata (L, sizeof (lua_regex));
+  re->code = 0;
+  re->md = 0;
+  re->ncap = 0;
+  luaL_getmetatable (L, "urxvt.regex");
+  lua_setmetatable (L, -2);
+
+  int err;
+  PCRE2_SIZE erroffset;
+  re->code = pcre2_compile ((PCRE2_SPTR)pattern, len, options, &err, &erroffset, 0);
+
+  if (!re->code)
+    {
+      PCRE2_UCHAR msg[256];
+      pcre2_get_error_message (err, msg, sizeof (msg));
+      return luaL_error (L, "invalid regex at offset %d: %s", (int)erroffset, (const char *)msg);
+    }
+
+  // the JIT is optional, matching falls back to the interpreter without it
+  pcre2_jit_compile (re->code, PCRE2_JIT_COMPLETE);
+  pcre2_pattern_info (re->code, PCRE2_INFO_CAPTURECOUNT, &re->ncap);
+
+  re->md = pcre2_match_data_create_from_pattern (re->code, 0);
+  if (!re->md)
+    return luaL_error (L, "out of memory");
+
+  return 1;
+}
+
+// Matches re against subject starting at byte offset, returns whether it
+// matched, raising an error if matching failed (e.g. at a match limit).
+static bool
+regex_exec (lua_State *L, lua_regex *re, const char *subject, size_t len, size_t offset, uint32_t options)
+{
+  int rc = pcre2_match (re->code, (PCRE2_SPTR)subject, len, offset, options, re->md, 0);
+
+  if (rc == PCRE2_ERROR_NOMATCH)
+    return false;
+
+  if (rc < 0)
+    {
+      PCRE2_UCHAR msg[256];
+      pcre2_get_error_message (rc, msg, sizeof (msg));
+      luaL_error (L, "regex match failed: %s", (const char *)msg);
+    }
+
+  return true;
+}
+
+// Pushes the results of the last match like string.find (find is true)
+// or string.match, unset groups are false.
+static int
+regex_push (lua_State *L, lua_regex *re, const char *subject, bool find)
+{
+  PCRE2_SIZE *ov = pcre2_get_ovector_pointer (re->md);
+  int n = 0;
+
+  if (find)
+    {
+      lua_pushinteger (L, ov[0] + 1);
+      lua_pushinteger (L, ov[1]);
+      n = 2;
+    }
+  else if (!re->ncap)
+    {
+      lua_pushlstring (L, subject + ov[0], ov[1] - ov[0]);
+      return 1;
+    }
+
+  luaL_checkstack (L, re->ncap, "too many captures");
+
+  for (uint32_t i = 1; i <= re->ncap; i++)
+    if (ov[2 * i] == PCRE2_UNSET)
+      lua_pushboolean (L, 0);
+    else
+      lua_pushlstring (L, subject + ov[2 * i], ov[2 * i + 1] - ov[2 * i]);
+
+  return n + re->ncap;
+}
+
+// The 0-based byte offset for the init argument at idx (1-based, negative
+// counts from the end, like string.find), or -1 if it is past the end.
+static lua_Integer
+regex_init (lua_State *L, int idx, size_t len)
+{
+  lua_Integer init = luaL_optinteger (L, idx, 1);
+
+  if (init < 0)
+    init += len + 1;
+
+  if (init < 1)
+    init = 1;
+
+  return init > (lua_Integer)len + 1 ? -1 : init - 1;
+}
+
+// re:find (s [, init]) -> start, end, captures... or nil, like string.find
+// re:match (s [, init]) -> captures, or the whole match, or nil
+static int
+regex_find_match (lua_State *L, bool find)
+{
+  lua_regex *re = check_regex (L);
+  size_t len;
+  const char *subject = luaL_checklstring (L, 2, &len);
+  lua_Integer offset = regex_init (L, 3, len);
+
+  if (offset < 0 || !regex_exec (L, re, subject, len, offset, 0))
+    {
+      lua_pushnil (L);
+      return 1;
+    }
+
+  return regex_push (L, re, subject, find);
+}
+
+static int regex_find  (lua_State *L) { return regex_find_match (L, true);  }
+static int regex_match (lua_State *L) { return regex_find_match (L, false); }
+
+// the iterator of re:gfind, the upvalues are the regex, the subject, the
+// offset to continue at and whether the last match was empty
+static int
+regex_gfind_next (lua_State *L)
+{
+  lua_regex *re = (lua_regex *)lua_touserdata (L, lua_upvalueindex (1));
+  size_t len;
+  const char *subject = lua_tolstring (L, lua_upvalueindex (2), &len);
+  lua_Integer offset = lua_tointeger (L, lua_upvalueindex (3));
+  bool empty = lua_toboolean (L, lua_upvalueindex (4));
+
+  if (offset < 0 || !re->code)
+    return 0;
+
+  bool found;
+
+  if (empty)
+    {
+      // after an empty match, look for a non-empty one at the same place
+      // first, then move on by a character, like perl's m//g
+      found = regex_exec (L, re, subject, len, offset, PCRE2_NOTEMPTY_ATSTART | PCRE2_ANCHORED);
+
+      if (!found && offset < (lua_Integer)len)
+        {
+          do
+            offset++;
+          while (offset < (lua_Integer)len && (subject[offset] & 0xc0) == 0x80);
+
+          found = regex_exec (L, re, subject, len, offset, 0);
+        }
+    }
+  else
+    found = regex_exec (L, re, subject, len, offset, 0);
+
+  if (!found)
+    {
+      lua_pushinteger (L, -1);
+      lua_replace (L, lua_upvalueindex (3));
+      return 0;
+    }
+
+  PCRE2_SIZE *ov = pcre2_get_ovector_pointer (re->md);
+  lua_pushinteger (L, ov[1]);
+  lua_replace (L, lua_upvalueindex (3));
+  lua_pushboolean (L, ov[0] == ov[1]);
+  lua_replace (L, lua_upvalueindex (4));
+
+  return regex_push (L, re, subject, true);
+}
+
+// re:gfind (s [, init]) -> iterator over the non-overlapping matches,
+// returning start, end, captures... for each, like re:find
+static int
+regex_gfind (lua_State *L)
+{
+  check_regex (L);
+  size_t len;
+  luaL_checklstring (L, 2, &len);
+
+  lua_settop (L, 3);
+  lua_pushinteger (L, regex_init (L, 3, len));
+  lua_replace (L, 3);
+  lua_pushboolean (L, 0);
+  lua_pushcclosure (L, regex_gfind_next, 4);
+
+  return 1;
+}
+
+static const luaL_Reg regex_methods[] = {
+  { "find",  regex_find  },
+  { "match", regex_match },
+  { "gfind", regex_gfind },
+  { 0, 0 }
+};
+
+// urxvt.regex_escape (s) -> s with every ASCII character besides letters,
+// digits and "_" escaped, so it matches literally, like perl's quotemeta
+static int
+u_regex_escape (lua_State *L)
+{
+  size_t len;
+  const char *s = luaL_checklstring (L, 1, &len);
+  luaL_Buffer b;
+
+  luaL_buffinit (L, &b);
+
+  for (size_t i = 0; i < len; i++)
+    {
+      unsigned char c = s[i];
+
+      if (c == 0)
+        // a backslash before a NUL would not be a valid escape
+        luaL_addstring (&b, "\\x00");
+      else
+        {
+          if (c < 0x80 && !isalnum (c) && c != '_')
+            luaL_addchar (&b, '\\');
+
+          luaL_addchar (&b, c);
+        }
+    }
+
+  luaL_pushresult (&b);
+  return 1;
+}
+
 static const luaL_Reg urxvt_functions[] = {
   { "bind",        u_bind        },
+  { "regex",       u_regex       },
+  { "regex_escape", u_regex_escape },
   { "style",       u_style       },
   { "spawn",       u_spawn       },
   { "timer",       u_timer       },
@@ -1928,6 +2215,14 @@ create_state (rxvt_term *term, const char *dir, char **plugins)
   luaL_register (L, 0, overlay_methods);
   lua_setfield (L, -2, "__index");
   lua_pushcfunction (L, overlay_close);
+  lua_setfield (L, -2, "__gc");
+  lua_pop (L, 1);
+
+  luaL_newmetatable (L, "urxvt.regex");
+  lua_newtable (L);
+  luaL_register (L, 0, regex_methods);
+  lua_setfield (L, -2, "__index");
+  lua_pushcfunction (L, regex_gc);
   lua_setfield (L, -2, "__gc");
   lua_pop (L, 1);
 

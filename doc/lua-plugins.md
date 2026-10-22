@@ -1,7 +1,8 @@
 # Lua plugins
 
-The meson build embeds LuaJIT (`-Dlua=auto`, on whenever LuaJIT is found) as
-a lightweight replacement for the perl extensions of the autoconf build.
+The meson build embeds LuaJIT (`-Dlua=auto`, on whenever LuaJIT and PCRE2 are
+found) as a lightweight replacement for the perl extensions of the autoconf
+build.
 
 Every `*.lua` file in `$XDG_CONFIG_HOME/urxvt/plugins` (by default
 `~/.config/urxvt/plugins`) is loaded once at startup, in alphabetical order.
@@ -247,6 +248,8 @@ and styling plugins do not overwrite them.
 | `urxvt.style {fg=, bg=, bold=, italic=, underline=, reverse=, blink=}` | returns `and_mask, or_mask`. Colors are indices (0-15 for the basic colors) or `"default"`. Attributes set to `true` are added, set to `false` are removed, and omitted ones are left alone. |
 | `urxvt.timer (after, fn [, repeat])` | calls `fn ()` after `after` seconds, then every `repeat` seconds. Returns a timer with `:start ([after [, repeat]])` and `:stop ()`. Active timers don't need to be referenced, and they never keep urxvt running. |
 | `urxvt.spawn (argv)` | starts a detached program. `argv` is an argument table, or a string run with `/bin/sh -c`. |
+| `urxvt.regex (pattern [, flags])` | compiles a perl compatible regular expression, see below |
+| `urxvt.regex_escape (s)` | escapes `s` to match literally, like perl's `quotemeta` or `\Q...\E` |
 | `urxvt.keysym_name (keysym)` | e.g. `"Return"` |
 | `urxvt.warn (msg)` | prints to stderr |
 | `urxvt.version`, `urxvt.plugin_dir` | |
@@ -254,3 +257,40 @@ and styling plugins do not overwrite them.
 | `urxvt.RS_Bold`, `RS_Italic`, `RS_Blink`, `RS_RVid`, `RS_Uline`, `RS_Sel` | rendition bits, e.g. for `t:xor_span`. urxvt draws selections with `RS_Sel + RS_RVid`: reversed, or in `highlightColor`/`highlightTextColor` instead if those are set |
 
 The LuaJIT `ffi` and `jit` modules are available as usual.
+
+### Regular expressions
+
+`urxvt.regex` takes the place of perl's regexes, so patterns from perl
+extension resources (e.g. `URxvt.matcher.pattern.1`) generally work
+unchanged. It is
+backed by PCRE2, which the lua plugin system always comes with. Patterns
+and subjects are UTF-8 with Unicode semantics, like perl with character
+strings: `\w`, `\s`, `\b`, `[[:upper:]]`, `\p{Lu}` and caseless matching
+know non-ASCII characters, and `.` matches a whole character. Invalid UTF-8
+in a subject never matches but is no error.
+
+`flags` is a string of perl modifiers: `i` (caseless), `m` (`^` and `$`
+match at newlines), `s` (`.` matches newlines) and `x` (extended). Invalid
+patterns and flags raise an error, wrap them in `pcall` when they come from
+resources or user input. Compile patterns once and reuse them, matching
+uses PCRE2's JIT.
+
+| method | description |
+|---|---|
+| `re:find (s [, init])` | `start, end, captures...` of the first match at or after byte `init` (default 1, negative counts from the end), or `nil`. Like `string.find`, positions are 1-based byte offsets, inclusive. |
+| `re:match (s [, init])` | the captures of the first match, or the whole match if the pattern has no groups, or `nil`, like `string.match` |
+| `re:gfind (s [, init])` | iterator over all non-overlapping matches, each returning what `re:find` would. Empty matches are handled like perl's `m//g`. |
+
+Groups that did not take part in a match are `false`. Matching raises an
+error when it hits PCRE2's match limit, e.g. with catastrophic
+backtracking, instead of freezing the terminal.
+
+```lua
+local URL = urxvt.regex ([[\bhttps?://[^\s<>"]+]], "i")
+
+for s, e in URL:gfind (t:line (row)) do ... end
+
+-- a literal search, caseless unless the query contains upper case
+local query = urxvt.regex (urxvt.regex_escape (text),
+                           urxvt.regex ("\\p{Lu}"):find (text) and "" or "i")
+```

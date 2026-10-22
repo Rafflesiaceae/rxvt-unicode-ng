@@ -10,7 +10,7 @@ option('pixbuf', type: 'feature', value: 'auto',
 option('startup-notification', type: 'feature', value: 'auto',
   description: 'freedesktop startup notification support')
 option('lua', type: 'feature', value: 'auto',
-  description: 'embedded LuaJIT plugin system (~/.config/urxvt/plugins/*.lua)')
+  description: 'embedded LuaJIT plugin system (~/.config/urxvt/plugins/*.lua), needs LuaJIT and PCRE2')
 
 # --- features --------------------------------------------------------------
 

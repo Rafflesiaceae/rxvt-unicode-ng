@@ -326,9 +326,16 @@ endif
 # The LuaJIT plugin system takes the place of perl in the meson build (the
 # autoconf build never enables it).
 luajit_dep = dependency('luajit', required: get_option('lua'))
-if luajit_dep.found()
+# PCRE2 backs urxvt.regex, the replacement for the perl regexes, so it is
+# part of the plugin API: plugins can rely on it, there is no lua without it.
+# 10.38 rejects \K in lookarounds, which made matches end before they start.
+pcre2_dep = dependency('libpcre2-8', version: '>= 10.38', required: get_option('lua'))
+have_lua = luajit_dep.found() and pcre2_dep.found()
+if have_lua
   cdata.set('ENABLE_LUA', 1)
-  x_deps += luajit_dep
+  x_deps += [luajit_dep, pcre2_dep]
+elif luajit_dep.found()
+  warning('LuaJIT was found but PCRE2 (libpcre2-8) was not, lua plugins are DISABLED')
 endif
 if not get_option('resources')
   if get_option('frills')
@@ -420,7 +427,7 @@ summary({
 
 summary({
   'embedded perl': false,
-  'lua plugins': luajit_dep.found(),
+  'lua plugins': have_lua,
   'image library': pixbuf_dep.found() ? 'gdk-pixbuf' : 'none',
   'xft': have_xft,
   'xim': have_xim,
