@@ -316,11 +316,6 @@ if support_image
   endif
 endif
 
-# --- perl ------------------------------------------------------------------
-
-# The embedded perl interpreter is deliberately not supported by the meson
-# build, ENABLE_PERL is never defined. Use the autoconf build for perl.
-
 # --- lua -------------------------------------------------------------------
 
 # The LuaJIT plugin system takes the place of perl in the meson build (the

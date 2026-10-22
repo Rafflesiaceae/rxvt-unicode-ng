@@ -75,7 +75,7 @@ extern struct rxvt_perl_interp rxvt_perl;
 
 #elif ENABLE_LUA
 
-#include "rxvtlua_neo.h"
+#include "rxvtlua.h"
 
 #else
 

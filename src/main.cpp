@@ -35,7 +35,10 @@
 #include "rxvt.h"               /* NECESSARY */
 #include "init.h"
 #include "keyboard.h"
+
+#if ENABLE_PERL
 #include "rxvtperl.h"
+#endif
 
 #include <limits>
 

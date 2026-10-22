@@ -48,9 +48,12 @@
 /*{{{ includes: */
 #include "../config.h"
 #include "rxvt.h"
-#include "rxvtperl.h"
 #include "version.h"
 #include "command.h"
+
+#if ENABLE_PERL
+#include "rxvtperl.h"
+#endif
 
 #ifdef KEYSYM_RESOURCE
 # include "keyboard.h"

@@ -27,7 +27,10 @@
 
 #include "../config.h"          /* NECESSARY */
 #include "rxvt.h"               /* NECESSARY */
-#include "rxvtperl.h"           /* NECESSARY */
+
+#if ENABLE_PERL
+#include "rxvtperl.h"
+#endif
 
 #include <inttypes.h>
 

@@ -93,7 +93,9 @@ typedef  int32_t tlen_t_; // specifically for use in the line_t structure
 #include "scrollbar.h"
 #include "ev_cpp.h"
 
+#if ENABLE_PERL
 #include "rxvtperl.h"
+#endif
 
 #if ENABLE_LUA
 #include "rxvtlua_neo.h"

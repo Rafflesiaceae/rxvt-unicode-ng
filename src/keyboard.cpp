@@ -29,7 +29,10 @@
 
 #include <string.h>
 
+#if ENABLE_PERL
 #include "rxvtperl.h"
+#endif
+
 #include "keyboard.h"
 
 /* an intro to the data structure:
