@@ -553,4 +553,9 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except KeyboardInterrupt:
+        # Keep Ctrl-C quiet while preserving the conventional SIGINT exit status.
+        print("\nInterrupted.", file=sys.stderr)
+        raise SystemExit(130) from None
