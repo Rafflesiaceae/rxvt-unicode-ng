@@ -1,6 +1,3 @@
-# Meson build for rxvt-unicode, a port of configure.ac (which is kept
-# around, so either build system can be used).
-
 project('rxvt-unicode', 'c', 'cpp',
   meson_version: '>= 1.3',
   license: 'GPL-3.0-or-later',
@@ -12,9 +9,6 @@ project('rxvt-unicode', 'c', 'cpp',
     'b_ndebug=true',
     'cpp_rtti=false',
     'warning_level=0',
-    # The code uses C++11 features (noexcept, override, decltype) and
-    # nothing newer, so pin the lowest standard it needs instead of
-    # depending on the compiler's default.
     'cpp_std=c++11',
   ],
 )

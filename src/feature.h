@@ -351,7 +351,7 @@
 /*
  * Width of the term internal border
  */
-#define INTERNALBORDERWIDTH	2
+#define INTERNALBORDERWIDTH	0
 
 /*
  * Width of the term external border

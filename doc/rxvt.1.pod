@@ -267,7 +267,7 @@ B<scrollTtyKeypress>.
 =item B<-sw>|B<+sw>
 
 Turn on/off scrolling with the scrollback buffer as new lines appear.
-This only takes effect if B<-si> is also given; resource
+This only takes effect if B<scrollTtyOutput> is False; resource
 B<scrollWithBuffer>.
 
 =item B<-ptab>|B<+ptab>
@@ -960,20 +960,20 @@ thumb with the pointer on middle button press/drag.
 =item B<scrollTtyOutput:> I<boolean>
 
 B<True>: scroll to bottom when tty receives output; option B<+si>.
-B<False>: do not scroll to bottom when tty receives output; option
-B<-si>.
+B<False>: (the default) do not scroll to bottom when tty receives output;
+option B<-si>.
 
 =item B<scrollWithBuffer:> I<boolean>
 
-B<True>: scroll with scrollback buffer when tty receives new lines (i.e.
-try to show the same lines) and B<scrollTtyOutput> is False; option
+B<True>: (the default) scroll with scrollback buffer when tty receives new
+lines (i.e. try to show the same lines) and B<scrollTtyOutput> is False; option
 B<-sw>. B<False>: do not scroll with scrollback buffer when tty receives
 new lines; option B<+sw>.
 
 =item B<scrollTtyKeypress:> I<boolean>
 
-B<True>: scroll to bottom when a non-special key is pressed. Special keys
-are those which are intercepted by rxvt-unicode for special handling and
+B<True>: (the default) scroll to bottom when a non-special key is pressed.
+Special keys are those which are intercepted by rxvt-unicode for special handling and
 are not passed onto the shell; option B<-sk>. B<False>: do not scroll to
 bottom when a non-special key is pressed; option B<+sk>.
 
