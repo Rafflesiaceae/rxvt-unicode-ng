@@ -15,7 +15,7 @@ Build the binary first, then run the Linux resource benchmark separately:
 
 ```sh
 ./dev.py build
-python3 tests/benchmark.py build/src/urxvt --output-dir /tmp/urxvt-baseline
+python3 tests/benchmark.py build/src/nrxvt --output-dir /tmp/urxvt-baseline
 
 # Run the same workloads against the system urxvt.
 python3 tests/benchmark.py /usr/bin/urxvt --output-dir /tmp/urxvt-system-baseline
@@ -64,16 +64,16 @@ Additional options:
 
 ```sh
 # Include startup with the shipped example plugins.
-python3 tests/benchmark.py build/src/urxvt --plugins src/lua
+python3 tests/benchmark.py build/src/nrxvt --plugins src/lua
 
 # Also sample CPU hotspots when perf permissions allow it.
-python3 tests/benchmark.py build/src/urxvt --perf
+python3 tests/benchmark.py build/src/nrxvt --perf
 
 # Add phase timestamps from an existing instrumented development binary.
-python3 tests/benchmark.py build/src/urxvt --profile-binary build/profile/build/src/urxvt
+python3 tests/benchmark.py build/src/nrxvt --profile-binary build/profile/build/src/nrxvt
 
 # Short smoke run when developing the harness.
-python3 tests/benchmark.py build/src/urxvt --startup-samples 2 --warmup 1 --repeats 1 --mib 1 --idle-seconds .1 --paced-seconds .2
+python3 tests/benchmark.py build/src/nrxvt --startup-samples 2 --warmup 1 --repeats 1 --mib 1 --idle-seconds .1 --paced-seconds .2
 ```
 
 Optional perf sampling saves recordings and text reports for each output
@@ -86,7 +86,7 @@ reason is saved in the perf log. Instrumented binaries can be produced with
 Run the functional integration checks with:
 
 ```sh
-python3 tests/rendering.py build/src/urxvt
+python3 tests/rendering.py build/src/nrxvt
 ```
 
 They require Xvfb, a C compiler, X11 development headers and Liberation Mono
@@ -96,7 +96,7 @@ rows in memory without saving screenshots.
 # Lua bars
 
 ```sh
-python3 tests/bars.py build/src/urxvt
+python3 tests/bars.py build/src/nrxvt
 ```
 
 Requires a Lua-enabled build, Xvfb, a C compiler, and X11/XTEST libraries. The harness uses an isolated display and traces geometry, fill, and copy requests without reading pixels or saving screenshots. It covers four-edge docking and priorities, nested sizing, atomic declaration rejection, accumulated damage, bar-only presentation, outside dragging and capture cancellation, runtime reservations, tiny windows, callback closure/errors, core/Xft fonts, the proportional Lua scrollbar, and coexistence with the native scrollbar. Bounded CPU samples include complete Lua submission and native diffing; they exclude presentation and are not end-to-end frame-rate measurements.
@@ -108,7 +108,7 @@ live mode changes, interlace/doublescan flags, unavailable timings and
 explicit resource overrides:
 
 ```sh
-python3 tests/refresh-rate.py build/src/urxvt
+python3 tests/refresh-rate.py build/src/nrxvt
 ```
 
 This requires RandR development headers in addition to the rendering test
@@ -125,7 +125,7 @@ packages. Use a build with frills and X resources enabled, as with the functiona
 checks. The binary must include the three rendering configuration switches.
 
 ```sh
-python3 tests/latency.py build/src/urxvt --json /tmp/urxvt-latency.json
+python3 tests/latency.py build/src/nrxvt --json /tmp/urxvt-latency.json
 ```
 
 The default test injects XTEST key events into the isolated terminal. The
@@ -145,22 +145,22 @@ Other workloads are available:
 
 ```sh
 # PTY output to the first window update, without keyboard delivery or echo.
-python3 tests/latency.py build/src/urxvt --mode output
+python3 tests/latency.py build/src/nrxvt --mode output
 
 # An application starts an update, writes text, then ends it 20 ms later.
-python3 tests/latency.py build/src/urxvt --mode synchronized --gap-ms 20
+python3 tests/latency.py build/src/nrxvt --mode synchronized --gap-ms 20
 
 # An application omits its end marker, exercising the 150 ms watchdog.
-python3 tests/latency.py build/src/urxvt --mode watchdog --samples 3 --warmup 1
+python3 tests/latency.py build/src/nrxvt --mode watchdog --samples 3 --warmup 1
 
 # Override automatic monitor detection with an explicit limit.
-python3 tests/latency.py build/src/urxvt --fps 144
+python3 tests/latency.py build/src/nrxvt --fps 144
 
 # Remove the refresh-rate wait to isolate rendering work.
-python3 tests/latency.py build/src/urxvt --fps 0
+python3 tests/latency.py build/src/nrxvt --fps 0
 
 # Compare a larger window using the same font and workload.
-python3 tests/latency.py build/src/urxvt --geometry 240x80
+python3 tests/latency.py build/src/nrxvt --geometry 240x80
 ```
 
 The synchronized workload starts its timer before the begin marker; the configured

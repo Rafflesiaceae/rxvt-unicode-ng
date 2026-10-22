@@ -356,7 +356,7 @@ def run(args, directory, report):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('binary', nargs='?', type=Path, default=Path('build/src/urxvt'))
+    parser.add_argument('binary', nargs='?', type=Path, default=Path('build/src/nrxvt'))
     parser.add_argument('--output-dir', type=Path, help='keep JSON, metadata and optional perf recordings here')
     parser.add_argument('--cpu', type=int, default=0, help='terminal CPU (default: 0)')
     parser.add_argument('--xvfb-cpu', type=int, default=2, help='X server CPU (default: 2)')

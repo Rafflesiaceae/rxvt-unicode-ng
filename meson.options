@@ -72,7 +72,7 @@ option('res-name', type: 'string', value: 'urxvt',
   description: 'default resource name')
 option('res-class', type: 'string', value: 'URxvt',
   description: 'resource class')
-option('name', type: 'string', value: 'urxvt',
+option('name', type: 'string', value: 'nrxvt',
   description: 'basename for the installed binaries')
 option('term', type: 'string', value: '',
   description: 'value of the TERM environment variable (default: rxvt-unicode or rxvt-unicode-256color)')

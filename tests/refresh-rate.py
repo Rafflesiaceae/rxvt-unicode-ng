@@ -38,7 +38,7 @@ def check_rate(terminal, rate):
 
 
 def main():
-    binary = str(Path(sys.argv[1] if len(sys.argv) > 1 else "build/src/urxvt").resolve())
+    binary = str(Path(sys.argv[1] if len(sys.argv) > 1 else "build/src/nrxvt").resolve())
     with tempfile.TemporaryDirectory(prefix="urxvt-refresh-rate-") as temporary:
         directory = Path(temporary)
         trace = directory / "render.so"

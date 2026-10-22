@@ -125,7 +125,7 @@ def run_case(binary, driver, env, args, frame, synchronized, batching):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("binary", nargs="?", default="build/src/urxvt")
+    parser.add_argument("binary", nargs="?", default="build/src/nrxvt")
     parser.add_argument("--samples", type=positive, default=30)
     parser.add_argument("--warmup", type=positive, default=5)
     parser.add_argument("--mode", choices=("key", "output", "synchronized", "watchdog"), default="key")

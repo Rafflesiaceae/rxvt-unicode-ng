@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Exercise Lua bars on an isolated Xvfb display, without pixel readback.
 
-Run: python3 tests/bars.py build/src/urxvt
+Run: python3 tests/bars.py build/src/nrxvt
 Requires Xvfb, a C compiler, X11 and XTEST development libraries.
 """
 

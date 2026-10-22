@@ -113,7 +113,7 @@ PROFILE_SRC = os.path.join(PROFILE_DIR, "src")
 PROFILE_BUILD = os.path.join(PROFILE_DIR, "build")
 
 # Prints "PROF <phase> <ms>" to stderr, measured from PROF_T0 (wall clock ms
-# taken by dev.py right before spawning urxvt), so process startup and dynamic
+# taken by dev.py right before spawning nrxvt), so process startup and dynamic
 # linking are included in the first phase.
 PROFILE_HELPER = r"""
 #include <stdio.h>
@@ -277,7 +277,7 @@ def sync_profile_tree():
 
 
 def build_profile_binary(jobs=None):
-    """Build the instrumented urxvt with the options of ./build."""
+    """Build the instrumented nrxvt with the options of ./build."""
     sync_profile_tree()
     cmd = ["meson", "setup", PROFILE_BUILD, PROFILE_SRC, *user_options()]
     if os.path.exists(os.path.join(PROFILE_BUILD, "build.ninja")):
@@ -414,7 +414,7 @@ def cmd_run(args):
     ensure_configured()
     compile_(args.jobs)
 
-    # The binary is named after the 'name' option (urxvt by default).
+    # The binary is named after the 'name' option (nrxvt by default).
     binary = os.path.join(BUILD_DIR, "src", build_option("name"))
     print(f"+ {shlex.join([binary, *args.rxvt_args])}", flush=True)
     # Replace this process, so signals and the exit status pass straight
@@ -491,12 +491,12 @@ def main(argv=None):
     p.set_defaults(func=cmd_test)
 
     p = sub.add_parser(
-        "run", parents=[jobs_parser], help="build and run the freshly built urxvt"
+        "run", parents=[jobs_parser], help="build and run the freshly built nrxvt"
     )
     p.add_argument(
         "rxvt_args",
         nargs=argparse.REMAINDER,
-        help="arguments passed to urxvt, after '--'",
+        help="arguments passed to nrxvt, after '--'",
     )
     p.set_defaults(func=cmd_run)
 
@@ -517,7 +517,7 @@ def main(argv=None):
     p = sub.add_parser(
         "profile-startup",
         parents=[jobs_parser],
-        help="time the startup phases of an instrumented urxvt build",
+        help="time the startup phases of an instrumented nrxvt build",
     )
     p.add_argument(
         "-n",
@@ -536,7 +536,7 @@ def main(argv=None):
     p.add_argument(
         "rxvt_args",
         nargs=argparse.REMAINDER,
-        help="arguments passed to urxvt instead of '-e true', after '--'",
+        help="arguments passed to nrxvt instead of '-e true', after '--'",
     )
     p.set_defaults(func=cmd_profile_startup)
 

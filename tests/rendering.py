@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Exercise real X11 presentation without screenshots.
 
-Run: python3 tests/rendering.py build/src/urxvt
+Run: python3 tests/rendering.py build/src/nrxvt
 Requires Xvfb, a C compiler and X11 development headers.
 """
 
@@ -329,7 +329,7 @@ def check_direct_drawing(terminal, xlib, display):
 
 
 def main():
-    binary = str(Path(sys.argv[1] if len(sys.argv) > 1 else "build/src/urxvt").resolve())
+    binary = str(Path(sys.argv[1] if len(sys.argv) > 1 else "build/src/nrxvt").resolve())
     with tempfile.TemporaryDirectory(prefix="urxvt-rendering-") as temporary:
         directory = Path(temporary)
         probe = directory / "probe.so"
