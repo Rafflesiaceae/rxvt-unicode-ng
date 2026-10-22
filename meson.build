@@ -24,10 +24,6 @@ if fs.exists('config.h')
   error('Found config.h of an in-tree autoconf build, run "make distclean" first.')
 endif
 
-if not fs.exists('libev/ev++.h')
-  error('libev/ is missing, run "./vendor.py" to fetch the vendored copy.')
-endif
-
 # version.h is the single source of truth for the version, it holds lines
 # such as '#define VERSION "9.31"'.
 version = ''
@@ -406,10 +402,10 @@ endif
 
 configure_file(output: 'config.h', configuration: cdata)
 
-# Both config.h and libev/ are included via the include path by the libev
+# Both config.h and vendor/libev/ are included via the include path by the libev
 # glue (ev_cpp.h), while "../config.h" from src/ resolves via the build
 # directory's src/ include path to the file generated above.
-config_inc = include_directories('.', 'libev')
+config_inc = include_directories('.', 'vendor/libev')
 
 subdir('src')
 subdir('doc')
@@ -426,10 +422,7 @@ summary({
 }, section: 'Configuration')
 
 summary({
-  'embedded perl': false,
-  'daemon': get_option('daemon'),
-  'urclock': get_option('urclock'),
-  'lua plugins': have_lua,
+  'embedded lua': have_lua,
   'image library': pixbuf_dep.found() ? 'gdk-pixbuf' : 'none',
   'xft': have_xft,
   'xim': have_xim,

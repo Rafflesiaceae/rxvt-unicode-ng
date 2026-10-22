@@ -247,7 +247,7 @@ def sync_profile_tree():
         wanted.add(path)
         os.makedirs(os.path.dirname(dst), exist_ok=True)
         if os.path.islink(src):
-            # Keep symlinks (e.g. libev -> ./vendor/libev) as they are.
+            # Keep symlinks as they are.
             target = os.readlink(src)
             if os.path.islink(dst) and os.readlink(dst) == target:
                 continue
