@@ -1,3 +1,14 @@
+# Run all harnesses
+
+```sh
+./dev.py test
+```
+
+This configures and builds the development binary if needed, then runs the
+rendering checks, refresh-rate checks and default latency benchmark in sequence.
+It stops on the first failure. Use `-j N` to set the number of build jobs.
+The dependencies for each harness are listed below.
+
 # Rendering checks
 
 Run the functional integration checks with:

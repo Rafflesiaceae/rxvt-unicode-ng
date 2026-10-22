@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-# Development helper for building, running and installing rxvt-unicode.
+# Development helper for building, testing, running and installing rxvt-unicode.
 #
 # Wraps the meson build (in ./build), so the usual steps are available as
 # subcommands:
 #
 #   ./dev.py configure [--prefix DIR] [-- MESON_ARGS...]
 #   ./dev.py build [-j N]
+#   ./dev.py test [-j N]
 #   ./dev.py run [-- RXVT_ARGS...]
 #   ./dev.py install [--destdir DIR]
 #   ./dev.py clean [--dist]
@@ -388,6 +389,15 @@ def cmd_build(args):
     compile_(args.jobs)
 
 
+def cmd_test(args):
+    ensure_configured()
+    compile_(args.jobs)
+    binary = os.path.join(BUILD_DIR, "src", build_option("name"))
+    # Run timing-sensitive harnesses sequentially against the same fresh build.
+    for script in ("rendering.py", "refresh-rate.py", "latency.py"):
+        run([sys.executable, "-u", os.path.join(ROOT, "tests", script), binary])
+
+
 def cmd_run(args):
     ensure_configured()
     compile_(args.jobs)
@@ -426,7 +436,7 @@ def cmd_clean(args):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(
-        description="Build, run and install rxvt-unicode for development"
+        description="Build, test, run and install rxvt-unicode for development"
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -456,6 +466,11 @@ def main(argv=None):
         "build", parents=[jobs_parser], help="build, configuring first if needed"
     )
     p.set_defaults(func=cmd_build)
+
+    p = sub.add_parser(
+        "test", parents=[jobs_parser], help="build and run all test harnesses"
+    )
+    p.set_defaults(func=cmd_test)
 
     p = sub.add_parser(
         "run", parents=[jobs_parser], help="build and run the freshly built urxvt"
