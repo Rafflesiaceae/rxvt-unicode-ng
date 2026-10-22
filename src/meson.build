@@ -62,13 +62,16 @@ if get_option('daemon')
   )
 endif
 
-executable('urclock', 'rclock.C',
-  include_directories: config_inc,
-  link_args: supcxx_args,
-  link_language: link_language,
-  dependencies: base_deps + x_deps,
-  install: true,
-)
+# urclock is an unrelated analog clock, it is optional (-Durclock=true).
+if get_option('urclock')
+  executable('urclock', 'rclock.C',
+    include_directories: config_inc,
+    link_args: supcxx_args,
+    link_language: link_language,
+    dependencies: base_deps + x_deps,
+    install: true,
+  )
+endif
 
 # The example plugins are not active by default, they are meant to be
 # copied or linked into ~/.config/urxvt/plugins.

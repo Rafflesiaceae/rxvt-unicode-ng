@@ -17,8 +17,11 @@ sed_args = [
 man_pages = [
   ['rxvt.1.man.in', rxvtname, '1'],
   ['rxvt.7.man.in', rxvtname, '7'],
-  ['rclock.1.man.in', 'urclock', '1'],
 ]
+# The urclock page is only installed together with urclock.
+if get_option('urclock')
+  man_pages += [['rclock.1.man.in', 'urclock', '1']]
+endif
 # The daemon pages are only installed together with the daemon.
 if get_option('daemon')
   man_pages += [

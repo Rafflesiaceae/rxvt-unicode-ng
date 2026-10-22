@@ -428,6 +428,7 @@ summary({
 summary({
   'embedded perl': false,
   'daemon': get_option('daemon'),
+  'urclock': get_option('urclock'),
   'lua plugins': have_lua,
   'image library': pixbuf_dep.found() ? 'gdk-pixbuf' : 'none',
   'xft': have_xft,
