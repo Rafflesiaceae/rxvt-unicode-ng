@@ -9,6 +9,78 @@ rendering checks, refresh-rate checks and default latency benchmark in sequence.
 It stops on the first failure. Use `-j N` to set the number of build jobs.
 The dependencies for each harness are listed below.
 
+# Startup, memory and CPU benchmarks
+
+Build the binary first, then run the Linux resource benchmark separately:
+
+```sh
+./dev.py build
+python3 tests/benchmark.py build/src/urxvt --output-dir /tmp/urxvt-baseline
+
+# Run the same workloads against the system urxvt.
+python3 tests/benchmark.py /usr/bin/urxvt --output-dir /tmp/urxvt-system-baseline
+```
+
+It requires Xvfb, Linux `/proc` access, Xft support in the binary and a usable
+`xft:monospace` font. Build with frills and X resources enabled, as with the other
+harnesses. The terminal, private X server and Python workload producer
+are pinned to logical CPUs 0, 2 and 4 respectively. These must be available CPUs
+on separate physical cores; use `--cpu`, `--xvfb-cpu` and `--driver-cpu` to choose
+others. On an SMT machine, do not assign two roles to sibling threads. The script
+checks affinity and records governor, turbo, CPU model and system load settings.
+It does not change system power settings or reserve cores against other tasks.
+
+The default run measures 50 startup samples after five warmups, three idle
+intervals, three repetitions of each approximately 16 MiB output workload and
+three repetitions of a three-second paced rendering workload. Font comparisons
+are interleaved, and throughput comparisons use a fixed randomized order.
+Results describe warm caches; the benchmark does not flush system caches.
+Avoid other CPU-heavy work during the run, and repeat comparisons sequentially.
+
+Startup includes process creation through the first PTY cursor-position reply,
+plus a separate start-and-exit measurement using `/bin/true`. Neither measures
+shell initialization or physical display latency. Idle measurements hide the
+cursor. Throughput covers ASCII scrolling, ANSI colors and mixed Unicode with
+and without scrollback. A parser reply acknowledges the full payload; CPU and
+memory samples follow an 80 ms settling interval for the scheduled final draw.
+Terminal and Xvfb CPU times are reported separately from the Python producer.
+Memory includes RSS, proportional set size (PSS) and private pages from
+`smaps_rollup`, both before and after filling scrollback.
+
+The larger 240x80 rendering workload submits changing text at 60 updates per
+second using the selected binary's default rendering behavior. It uses standard
+urxvt options, so it also runs on `/usr/bin/urxvt`. Rendering-option comparisons
+belong to the separate latency and rendering harnesses. Submitted updates are
+counted, not presented frames, so lower CPU use can also mean fewer rendered
+frames. Xvfb uses software rendering: its memory and CPU costs do not represent
+the user's GPU or compositor. No screenshots or desktop input are used.
+
+The output directory retains `results.json` with every sample, executable hashes,
+run settings and metadata. Use a new directory for each run. Partial results are
+marked `completed: false`; a successful run verifies that the executable hash
+did not change. The executable is used directly, so do not rebuild it mid-run.
+
+Additional options:
+
+```sh
+# Include startup with the shipped example plugins.
+python3 tests/benchmark.py build/src/urxvt --plugins src/lua
+
+# Also sample CPU hotspots when perf permissions allow it.
+python3 tests/benchmark.py build/src/urxvt --perf
+
+# Add phase timestamps from an existing instrumented development binary.
+python3 tests/benchmark.py build/src/urxvt --profile-binary build/profile/build/src/urxvt
+
+# Short smoke run when developing the harness.
+python3 tests/benchmark.py build/src/urxvt --startup-samples 2 --warmup 1 --repeats 1 --mib 1 --idle-seconds .1 --paced-seconds .2
+```
+
+Optional perf sampling saves recordings and text reports for each output
+workload. If sampling is denied, the resource measurements are retained and the
+reason is saved in the perf log. Instrumented binaries can be produced with
+`./dev.py profile-startup`; phase timings are separate from unmodified timings.
+
 # Rendering checks
 
 Run the functional integration checks with:
