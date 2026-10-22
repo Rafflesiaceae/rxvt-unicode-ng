@@ -14,10 +14,6 @@ option('lua', type: 'feature', value: 'auto',
 
 # --- features --------------------------------------------------------------
 
-option('daemon', type: 'boolean', value: false,
-  description: 'build and install the urxvtd daemon and the urxvtc client')
-option('urclock', type: 'boolean', value: false,
-  description: 'build and install urclock, the analog X clock')
 option('xim', type: 'boolean', value: true,
   description: 'XIM (X Input Method) protocol support')
 option('frills', type: 'boolean', value: true,

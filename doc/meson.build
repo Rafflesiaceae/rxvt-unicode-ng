@@ -1,4 +1,4 @@
-# Manual pages, a port of doc/Makefile.in.
+# Manual pages.
 #
 # The *.man.in files are pregenerated from the pods and checked in, so only
 # the @@...@@ placeholders need to be filled in.
@@ -18,17 +18,6 @@ man_pages = [
   ['rxvt.1.man.in', rxvtname, '1'],
   ['rxvt.7.man.in', rxvtname, '7'],
 ]
-# The urclock page is only installed together with urclock.
-if get_option('urclock')
-  man_pages += [['rclock.1.man.in', 'urclock', '1']]
-endif
-# The daemon pages are only installed together with the daemon.
-if get_option('daemon')
-  man_pages += [
-    ['rxvtc.1.man.in', rxvtname + 'c', '1'],
-    ['rxvtd.1.man.in', rxvtname + 'd', '1'],
-  ]
-endif
 
 foreach page : man_pages
   custom_target(page[1] + '.' + page[2],
@@ -41,5 +30,4 @@ foreach page : man_pages
   )
 endforeach
 
-# Terminfo installation is disabled as a workaround for FS#79143, just like
-# in doc/Makefile.in.
+# Terminfo installation is disabled as a workaround for FS#79143.
