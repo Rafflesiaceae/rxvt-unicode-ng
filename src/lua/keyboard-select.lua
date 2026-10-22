@@ -19,6 +19,10 @@
 --   / ?                search forward/backward (case-insensitive unless the
 --                      text contains upper case letters), n/N repeat,
 --                      C-S-v in the search prompt pastes the clipboard
+--                      In the prompt, C-a C-e (Home End) move the cursor
+--                      to the start/end, Left Right by a character, C-u
+--                      clears the text before the cursor, C-w removes the
+--                      word before it
 --   v V C-v            toggle normal/linewise/blockwise selection
 --   y Return           copy the selection, Return quits afterwards
 --   Y                  copy the selected lines, or the cursor line and quit
@@ -46,10 +50,17 @@ local SPACE_RE, WORD_RE = urxvt.regex ("^\\s"), urxvt.regex ("^\\w")
 -- search texts with upper case letters are case-sensitive
 local UPPER_RE = urxvt.regex ("[[:upper:]]")
 
+-- the cursor of the search prompt is drawn reversed, the text isn't
+local PROMPT_TEXT = { urxvt.style { reverse = false } }
+local PROMPT_CURSOR = { urxvt.style { reverse = true } }
+
 -- the keys of move_cursor, those in SCROLL_KEYS only with Control
 local CURSOR_KEYS = { g = true, G = true, ["0"] = true, ["^"] = true, ["$"] = true, H = true, M = true, L = true }
 local SCROLL_KEYS = { f = true, b = true, d = true, u = true }
 local MOVE_TO_KEYS = { [";"] = true, [","] = true, w = true, W = true, b = true, B = true, e = true, E = true }
+
+-- one UTF-8 encoded character, as pattern
+local UTF8_CHAR = "[%z\1-\127\194-\244][\128-\191]*"
 
 -- number of characters of an UTF-8 string
 local function length (s)
@@ -140,6 +151,7 @@ local function status_area (t, ks, extra)
   local stat
 
   if ks.search ~= "" then
+    -- the padding makes room for the cursor at the end of the text
     stat = ks.search .. string.rep (" ", t:ncol () - length (ks.search))
   else
     stat = ""
@@ -169,7 +181,13 @@ local function status_area (t, ks, extra)
     ks.overlay_len = len
   end
 
-  ks.overlay:set (0, 0, stat)
+  ks.overlay:set (0, 0, stat, table.unpack (PROMPT_TEXT))
+  if ks.search ~= "" then
+    -- redraws the character at the cursor reversed, or a blank at the end
+    local col = length (ks.search:sub (1, ks.search_cur))
+    local cell = ks.search:match ("^" .. UTF8_CHAR, ks.search_cur + 1) or " "
+    if col < len then ks.overlay:set (col, 0, cell, table.unpack (PROMPT_CURSOR)) end
+  end
   ks.overlay:show ()
 end
 
@@ -486,6 +504,8 @@ local function activate (t, search)
   local ks = {
     select = "", dollar = 0, move_to = false,
     search = "", search_dir = 1, search_mode = false,
+    -- the number of bytes of ks.search before the prompt's cursor
+    search_cur = 0,
     clipboard = t:resource_boolean ("keyboard-select.clipboard"),
     -- the selection is drawn like urxvt does it
     hl_sel = t:resource ("highlightColor") ~= nil,
@@ -493,6 +513,7 @@ local function activate (t, search)
 
   if search then
     ks.search, ks.search_dir, ks.search_mode = "?", -1, true
+    ks.search_cur = 1
   end
 
   ks.oldcr, ks.oldcc = t:cursor ()
@@ -532,9 +553,29 @@ end
 
 -- key handling
 
--- adds text to the search and searches again from where it started
+-- the byte count before the character preceding/following the cursor
+local function char_before (ks)
+  local i = ks.search_cur
+  while i > 1 and ks.search:byte (i) >= 0x80 and ks.search:byte (i) < 0xc0 do i = i - 1 end
+  return i - 1
+end
+
+local function char_after (ks)
+  local _, e = ks.search:find ("^" .. UTF8_CHAR, ks.search_cur + 1)
+  return e or ks.search_cur
+end
+
+-- replaces the text between the byte counts from and to (the first byte of
+-- the search is the / or ? that opened the prompt) and puts the cursor at
+-- the end of the replacement
+local function search_replace (ks, from, to, text)
+  ks.search = ks.search:sub (1, from) .. text .. ks.search:sub (to + 1)
+  ks.search_cur = from + #text
+end
+
+-- adds text at the cursor and searches again from where the search started
 local function search_append (t, ks, text)
-  ks.search = ks.search .. text
+  search_replace (ks, ks.search_cur, ks.search_cur, text)
   set_pattern (ks, ks.search:sub (2))
   t:cursor (ks.srhcr, ks.srhcc)
   find_next (t, ks)
@@ -561,8 +602,34 @@ local function search_key (t, ks, ev, key, char, enter)
     ks.search = ""
     status_area (t, ks)
   elseif key == "BackSpace" then
-    ks.search = ks.search:gsub ("[%z\1-\127\194-\244][\128-\191]*$", "")
-    if ks.search == "" and ks.search_mode then return deactivate (t) end
+    if #ks.search == 1 then
+      -- nothing left to delete, this ends the search
+      ks.search = ""
+      if ks.search_mode then return deactivate (t) end
+    elseif ks.search_cur > 1 then
+      search_replace (ks, char_before (ks), ks.search_cur, "")
+    end
+    status_area (t, ks)
+  elseif ev.ctrl and key:lower () == "u" then
+    -- clears the text before the cursor
+    search_replace (ks, 1, ks.search_cur, "")
+    status_area (t, ks)
+  elseif ev.ctrl and key:lower () == "w" then
+    -- removes the blanks and the word before the cursor
+    local before = ks.search:sub (2, ks.search_cur)
+    search_replace (ks, 1 + #before:gsub ("%s*%S*$", ""), ks.search_cur, "")
+    status_area (t, ks)
+  elseif key == "Home" or (ev.ctrl and key:lower () == "a") then
+    ks.search_cur = 1
+    status_area (t, ks)
+  elseif key == "End" or (ev.ctrl and key:lower () == "e") then
+    ks.search_cur = #ks.search
+    status_area (t, ks)
+  elseif key == "Left" then
+    if ks.search_cur > 1 then ks.search_cur = char_before (ks) end
+    status_area (t, ks)
+  elseif key == "Right" then
+    ks.search_cur = char_after (ks)
     status_area (t, ks)
   elseif enter then
     set_pattern (ks, ks.search:sub (2))
@@ -653,6 +720,7 @@ local function key_press (t, ks, ev, keysym, str)
     move_to (t, ks, key)
   elseif key == "/" or key == "?" then
     ks.search = key
+    ks.search_cur = 1
     ks.search_dir = key == "?" and -1 or 1
     ks.srhcr, ks.srhcc = t:cursor ()
     status_area (t, ks)
