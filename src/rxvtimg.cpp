@@ -1,5 +1,5 @@
 /*----------------------------------------------------------------------*
- * File:	rxvtimg.C
+ * File:	rxvtimg.cpp
  *----------------------------------------------------------------------*
  *
  * All portions of code are copyright by their respective author/s.

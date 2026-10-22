@@ -5,7 +5,7 @@
 
 typedef uint32_t unicode_t;
 
-// order must match the table in encoding.C(!)
+// order must match the table in encoding.cpp(!)
 enum codeset {
   CS_UNKNOWN = 0,
   CS_US_ASCII,

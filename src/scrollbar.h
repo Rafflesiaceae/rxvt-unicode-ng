@@ -153,13 +153,13 @@ private:
   // update style dependent data
   void update_data ();
 
-  // scrollbar-next.C
+  // scrollbar-next.cpp
   int show_next (int);
-  // scrollbar-rxvt.C
+  // scrollbar-rxvt.cpp
   int show_rxvt (int);
-  // scrollbar-xterm.C
+  // scrollbar-xterm.cpp
   int show_xterm (int);
-  // scrollbar-plain.C
+  // scrollbar-plain.cpp
   int show_plain (int);
 
   void init_next ();

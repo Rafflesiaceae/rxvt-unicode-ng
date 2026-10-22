@@ -1,5 +1,5 @@
 /*----------------------------------------------------------------------*
- * File:	keyboard.C
+ * File:	keyboard.cpp
  *----------------------------------------------------------------------*
  *
  * All portions of code are copyright by their respective author/s.

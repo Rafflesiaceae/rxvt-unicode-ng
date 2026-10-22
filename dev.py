@@ -140,7 +140,7 @@ PROFILE_PATCHES = {
     "src/rxvt.h": [
         ('#include "feature.h"\n', '#include "feature.h"\n' + PROFILE_HELPER),
     ],
-    "src/rxvt.C": [
+    "src/rxvt.cpp": [
         (
             "    rxvt_init ();\n",
             '    prof ("main");\n    rxvt_init ();\n    prof ("rxvt_init");\n',
@@ -150,7 +150,7 @@ PROFILE_PATCHES = {
             '    t->init (argc, argv, environ);\n    prof ("init done");\n',
         ),
     ],
-    "src/init.C": [
+    "src/init.cpp": [
         ("  init_vars ();\n", '  init_vars ();\n  prof ("init_vars");\n'),
         (
             "  const char **cmd_argv = init_resources (argc, argv);\n",
@@ -181,7 +181,7 @@ PROFILE_PATCHES = {
             '  init_command (cmd_argv);\n  prof ("init_command (pty+fork)");\n',
         ),
     ],
-    "src/rxvtfont.C": [
+    "src/rxvtfont.cpp": [
         (
             "  FcPattern *p = FcNameParse ((FcChar8 *) name);\n",
             '  prof ("xft load start");\n'
@@ -197,7 +197,7 @@ PROFILE_PATCHES = {
             "      FT_Face face = XftLockFace (f);\n",
         ),
     ],
-    "src/screen.C": [
+    "src/screen.cpp": [
         # Time stamps the end of the first two refreshes (the first one is
         # the initial draw, the second one usually shows the shell prompt).
         (

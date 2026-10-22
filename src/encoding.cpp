@@ -1,5 +1,5 @@
 /*----------------------------------------------------------------------*
- * File:	encoding.C
+ * File:	encoding.cpp
  *----------------------------------------------------------------------*
  *
  * All portions of code are copyright by their respective author/s.

@@ -148,14 +148,14 @@ class out_of_input { };
  * PROTOTYPES
  *****************************************************************************
  */
-// main.C
+// main.cpp
 #define SET_LOCALE(locale) rxvt_set_locale (locale)
 extern bool rxvt_set_locale (const char *locale) noexcept;
 extern void rxvt_push_locale (const char *locale) noexcept;
 extern void rxvt_pop_locale () noexcept;
 void rxvt_init ();
 
-// misc.C
+// misc.cpp
 char *           rxvt_wcstombs                    (const wchar_t *str, int len = -1);
 wchar_t *        rxvt_mbstowcs                    (const char *str, int len = -1);
 char *           rxvt_wcstoutf8                   (const wchar_t *str, int len = -1);
@@ -1362,7 +1362,7 @@ struct rxvt_term : zero_initialized, rxvt_vars, rxvt_screen
   void im_set_position ();
 #endif
 
-  // command.C
+  // command.cpp
   void key_press (XKeyEvent &ev);
   void key_release (XKeyEvent &ev);
 
@@ -1403,7 +1403,7 @@ struct rxvt_term : zero_initialized, rxvt_vars, rxvt_screen
   void process_terminal_mode (int mode, int priv, unsigned int nargs, const int *arg);
   void process_sgr_mode (unsigned int nargs, const int *arg);
   void set_cursor_style (int style);
-  // init.C
+  // init.cpp
   void init (stringvec *argv, stringvec *envv);
   void init (int argc, const char *const *argv, const char *const *envv);
   void init2 (int argc, const char *const *argv);
@@ -1420,7 +1420,7 @@ struct rxvt_term : zero_initialized, rxvt_vars, rxvt_screen
   void get_colors ();
   void get_ourmods ();
   void set_icon (const char *file);
-  // main.C
+  // main.cpp
   void tt_winch ();
   rxvt_term ();
   ~rxvt_term ();
@@ -1442,7 +1442,7 @@ struct rxvt_term : zero_initialized, rxvt_vars, rxvt_screen
   void set_widthheight (unsigned int newwidth, unsigned int newheight);
   void get_window_origin (int &x, int &y);
 
-  // screen.C
+  // screen.cpp
 
   bool option (uint8_t opt) const noexcept
   {
@@ -1573,7 +1573,7 @@ struct rxvt_term : zero_initialized, rxvt_vars, rxvt_screen
   void selection_extend (int x, int y, int flag) noexcept;
   void selection_rotate (int x, int y) noexcept;
 
-  // xdefaults.C
+  // xdefaults.cpp
   void rxvt_usage (int type);
   const char **get_options (int argc, const char *const *argv);
   int parse_keysym (const char *str, unsigned int &state);

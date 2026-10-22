@@ -1,5 +1,5 @@
 /*----------------------------------------------------------------------*
- * File:	rxvtlua_neo.C - embedded LuaJIT plugin system
+ * File:	rxvtlua_neo.cpp - embedded LuaJIT plugin system
  *----------------------------------------------------------------------*
  *
  * Loads every *.lua file from $XDG_CONFIG_HOME/urxvt/plugins (default

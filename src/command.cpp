@@ -1,5 +1,5 @@
 /*----------------------------------------------------------------------*
- * File:	command.C
+ * File:	command.cpp
  *----------------------------------------------------------------------*
  *
  * All portions of code are copyright by their respective author/s.
@@ -2019,7 +2019,7 @@ rxvt_term::button_press (XButtonEvent &ev)
             {
               case Button1:
                 /* allow meta + click to select rectangular areas */
-                /* should be done in screen.C */
+                /* should be done in screen.cpp */
 #if ENABLE_FRILLS
                 selection.rect = !!(ev.state & ModMetaMask);
 #else

@@ -1,5 +1,5 @@
 /*----------------------------------------------------------------------*
- * File:	rxvtfont.C
+ * File:	rxvtfont.cpp
  *----------------------------------------------------------------------*
  * Copyright (c) 2003-2008 Marc Lehmann <schmorp@schmorp.de>
  *				- original version.

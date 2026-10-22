@@ -1,5 +1,5 @@
 /*----------------------------------------------------------------------*
- * File:        main.C
+ * File:        main.cpp
  *----------------------------------------------------------------------*
  *
  * All portions of code are copyright by their respective author/s.

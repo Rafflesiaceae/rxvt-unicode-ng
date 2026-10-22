@@ -1,5 +1,5 @@
 /*----------------------------------------------------------------------*
- * File:	rxvttoolkit.C
+ * File:	rxvttoolkit.cpp
  *----------------------------------------------------------------------*
  *
  * All portions of code are copyright by their respective author/s.

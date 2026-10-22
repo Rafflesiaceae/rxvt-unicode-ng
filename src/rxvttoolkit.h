@@ -39,7 +39,7 @@
 
 #include "callback.h"
 
-// see rxvttoolkit.C:xa_names, which must be kept in sync
+// see rxvttoolkit.cpp:xa_names, which must be kept in sync
 enum {
   XA_TEXT,
   XA_COMPOUND_TEXT,

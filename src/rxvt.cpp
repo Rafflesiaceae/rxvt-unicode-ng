@@ -1,5 +1,5 @@
 /*----------------------------------------------------------------------*
- * File:	rxvt.C
+ * File:	rxvt.cpp
  *----------------------------------------------------------------------*
  *
  * All portions of code are copyright by their respective author/s.

@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# generated the color_level table used when finding a nearby color in src/command.C
+# generated the color_level table used when finding a nearby color in src/command.cpp
 
 use strict;
 

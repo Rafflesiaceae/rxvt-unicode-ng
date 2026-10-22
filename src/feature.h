@@ -286,7 +286,7 @@
  * machines, so it is disabled by default. Use freebsd or any other kernel
  * that doesn't suffer from this bug and it will be fast either way.
  *
- * See command.C for details.
+ * See command.cpp for details.
  */
 #if __linux__
 # define LINUX_YIELD_HACK 0

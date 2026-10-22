@@ -2,37 +2,37 @@
 #
 # The perl glue (rxvtperl.xs, urxvt.pm and the extensions in perl/) is left
 # out, the meson build does not support the embedded perl interpreter. The
-# lua plugin system (rxvtlua_neo.C, example plugins in lua/) replaces it.
+# lua plugin system (rxvtlua_neo.cpp, example plugins in lua/) replaces it.
 
 # Objects shared between urxvt and the urxvtd daemon.
 common = static_library('rxvt-common',
-  'command.C',
-  'rxvtfont.C',
-  'init.C',
-  'main.C',
-  'misc.C',
-  'screen.C',
-  'frame_neo.C',
-  'prompt_neo.C',
-  'scrollbar.C',
-  'scrollbar-next.C',
-  'scrollbar-rxvt.C',
-  'scrollbar-xterm.C',
-  'scrollbar-plain.C',
-  'xdefaults.C',
-  'encoding.C',
-  'rxvttoolkit.C',
-  'monitor_neo.C',
-  'rxvtutil.C',
-  'keyboard.C',
-  'rxvtimg.C',
-  'ev_cpp.C',
-  'rxvtlua_neo.C',
+  'command.cpp',
+  'rxvtfont.cpp',
+  'init.cpp',
+  'main.cpp',
+  'misc.cpp',
+  'screen.cpp',
+  'frame_neo.cpp',
+  'prompt_neo.cpp',
+  'scrollbar.cpp',
+  'scrollbar-next.cpp',
+  'scrollbar-rxvt.cpp',
+  'scrollbar-xterm.cpp',
+  'scrollbar-plain.cpp',
+  'xdefaults.cpp',
+  'encoding.cpp',
+  'rxvttoolkit.cpp',
+  'monitor_neo.cpp',
+  'rxvtutil.cpp',
+  'keyboard.cpp',
+  'rxvtimg.cpp',
+  'ev_cpp.cpp',
+  'rxvtlua_neo.cpp',
   include_directories: config_inc,
   dependencies: base_deps + x_deps,
 )
 
-executable(rxvtname, 'rxvt.C',
+executable(rxvtname, 'rxvt.cpp',
   include_directories: config_inc,
   link_with: common,
   link_args: supcxx_args,
@@ -43,7 +43,7 @@ executable(rxvtname, 'rxvt.C',
 
 # The daemon and its client are optional (-Ddaemon=false).
 if get_option('daemon')
-  executable(rxvtname + 'd', 'rxvtd.C', 'rxvtdaemon.C',
+  executable(rxvtname + 'd', 'rxvtd.cpp', 'rxvtdaemon.cpp',
     include_directories: config_inc,
     link_with: common,
     link_args: supcxx_args,
@@ -53,7 +53,7 @@ if get_option('daemon')
   )
 
   # The client only talks to the daemon over a socket, so it needs no X.
-  executable(rxvtname + 'c', 'rxvtc.C', 'rxvtdaemon.C',
+  executable(rxvtname + 'c', 'rxvtc.cpp', 'rxvtdaemon.cpp',
     include_directories: config_inc,
     link_args: supcxx_args,
     link_language: link_language,
@@ -64,7 +64,7 @@ endif
 
 # urclock is an unrelated analog clock, it is optional (-Durclock=true).
 if get_option('urclock')
-  executable('urclock', 'rclock.C',
+  executable('urclock', 'rclock.cpp',
     include_directories: config_inc,
     link_args: supcxx_args,
     link_language: link_language,
