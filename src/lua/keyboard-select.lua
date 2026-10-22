@@ -17,7 +17,8 @@
 --                      the window
 --   C-f C-b C-d C-u    scroll a page/half a page down/up
 --   / ?                search forward/backward (case-insensitive unless the
---                      text contains upper case letters), n/N repeat
+--                      text contains upper case letters), n/N repeat,
+--                      C-S-v in the search prompt pastes the clipboard
 --   v V C-v            toggle normal/linewise/blockwise selection
 --   y Return           copy the selection, Return quits afterwards
 --   Y                  copy the selected lines, or the cursor line and quit
@@ -531,8 +532,30 @@ end
 
 -- key handling
 
+-- adds text to the search and searches again from where it started
+local function search_append (t, ks, text)
+  ks.search = ks.search .. text
+  set_pattern (ks, ks.search:sub (2))
+  t:cursor (ks.srhcr, ks.srhcc)
+  find_next (t, ks)
+  status_area (t, ks)
+end
+
+-- adds pasted text to the search like typed text, only its first line as
+-- matches never span lines
+local function search_paste (t, ks, text)
+  -- the search might be over by the time the text arrives
+  if not text or t.keyboard_select ~= ks or ks.search == "" then return end
+
+  text = text:match ("^[^\r\n]*"):gsub ("%c", "")
+  if text ~= "" then
+    search_append (t, ks, text)
+    t:refresh ()
+  end
+end
+
 -- the keys of the search prompt
-local function search_key (t, ks, key, char, enter)
+local function search_key (t, ks, ev, key, char, enter)
   if key == "Escape" then
     if ks.search_mode then return deactivate (t) end
     ks.search = ""
@@ -549,12 +572,11 @@ local function search_key (t, ks, key, char, enter)
       if ks.search_mode then return deactivate (t) end
       status_area (t, ks)
     end
+  elseif ev.ctrl and ev.shift and key:lower () == "v" then
+    -- pastes the clipboard
+    t:selection_fetch (true, function (text) search_paste (t, ks, text) end, ev.time)
   elseif char then
-    ks.search = ks.search .. char
-    set_pattern (ks, ks.search:sub (2))
-    t:cursor (ks.srhcr, ks.srhcc)
-    find_next (t, ks)
-    status_area (t, ks)
+    search_append (t, ks, char)
   end
 end
 
@@ -571,7 +593,7 @@ local function key_press (t, ks, ev, keysym, str)
   if ctrl and lower == "c" then
     deactivate (t)
   elseif ks.search ~= "" then
-    search_key (t, ks, key, char, enter)
+    search_key (t, ks, ev, key, char, enter)
   elseif ks.move_to then
     if key == "Escape" then
       ks.move_to = false
