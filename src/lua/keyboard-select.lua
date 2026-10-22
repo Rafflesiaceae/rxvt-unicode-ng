@@ -181,12 +181,12 @@ local function status_area (t, ks, extra)
     ks.overlay_len = len
   end
 
-  ks.overlay:set (0, 0, stat, table.unpack (PROMPT_TEXT))
+  ks.overlay:set (0, 0, stat, unpack (PROMPT_TEXT))
   if ks.search ~= "" then
     -- redraws the character at the cursor reversed, or a blank at the end
     local col = length (ks.search:sub (1, ks.search_cur))
     local cell = ks.search:match ("^" .. UTF8_CHAR, ks.search_cur + 1) or " "
-    if col < len then ks.overlay:set (col, 0, cell, table.unpack (PROMPT_CURSOR)) end
+    if col < len then ks.overlay:set (col, 0, cell, unpack (PROMPT_CURSOR)) end
   end
   ks.overlay:show ()
 end
