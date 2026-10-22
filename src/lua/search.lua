@@ -22,16 +22,14 @@ local CURRENT = { urxvt.style { fg = 0, bg = 11, reverse = false } }
 -- the prompt overlay covers the last three rows (one plus its border)
 local PROMPT_ROWS = 3
 
--- Sets the query, search.needle is what is actually searched for: smart
--- case, i.e. case-insensitive unless the query contains upper case letters.
+local UPPER = urxvt.regex ("[[:upper:]]")
+
+-- Sets the query, search.needle is the literal regex that is actually
+-- searched for: smart case, i.e. case-insensitive unless the query
+-- contains upper case letters.
 local function set_query (search, query)
   search.query = query
-  search.fold = not query:find ("%u")
-  search.needle = search.fold and query:lower () or query
-end
-
-local function prepare (search, text)
-  return search.fold and text:lower () or text
+  search.needle = query ~= "" and urxvt.regex (urxvt.regex_escape (query), UPPER:find (query) and "" or "i") or nil
 end
 
 -- number of characters of an UTF-8 string
@@ -41,13 +39,13 @@ end
 
 -- the last match in row starting before byte `before` (exclusive), or nil
 local function last_in_row (t, search, row, before)
-  local text = prepare (search, (t:line (row)))
+  local text = t:line (row)
   local query = search.needle
   local found
   local pos = 1
 
   while true do
-    local s = text:find (query, pos, true)
+    local s = query:find (text, pos)
     if not s or s >= before then break end
     found = s
     pos = s + 1
@@ -67,8 +65,7 @@ end
 -- searches newer rows, starting with the match after (row, byte)
 local function find_newer (t, search, row, byte)
   for r = row, t:nrow () - 1 do
-    local text = prepare (search, (t:line (r)))
-    local s = text:find (search.needle, r == row and byte + 1 or 1, true)
+    local s = search.needle:find ((t:line (r)), r == row and byte + 1 or 1)
     if s then return r, s end
   end
 end
@@ -202,16 +199,9 @@ function M.on_refresh_begin (t)
   local view = t:view_start ()
 
   for row = view, view + t:nrow () - 1 - PROMPT_ROWS do
-    local text = prepare (search, (t:line (row)))
-    local pos = 1
-
-    while true do
-      local s, e = text:find (query, pos, true)
-      if not s then break end
-
+    for s, e in query:gfind ((t:line (row))) do
       local style = (row == search.row and s == search.byte) and CURRENT or MATCH
       t:highlight (row, t:col (row, s), t:col (row, e + 1), unpack (style))
-      pos = e + 1
     end
   end
 end
