@@ -11,8 +11,10 @@ loaded as plugins can live in `plugins/lib/` and be loaded with `require`.
 Without any plugin file no Lua state is created at all. With plugins, only
 the hooks they implement are ever called, so unused hooks cost nothing.
 
-Two example plugins are installed to `share/urxvt/lua` (see `src/lua/`):
+Three example plugins are installed to `share/urxvt/lua` (see `src/lua/`):
 
+- `keyboard-select.lua` selects and copies text with vi-like keys (`M-Escape`),
+  a port of the keyboard-select perl extension
 - `links.lua` underlines URLs, opens them with Ctrl + click and lets you
   select them from the keyboard (`M-u`)
 - `search.lua` searches incrementally through the whole scrollback (`M-s`)

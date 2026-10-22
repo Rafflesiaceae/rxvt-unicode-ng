@@ -70,6 +70,6 @@ executable('urclock', 'rclock.C',
 # The example plugins are not active by default, they are meant to be
 # copied or linked into ~/.config/urxvt/plugins.
 if luajit_dep.found()
-  install_data('lua/links.lua', 'lua/search.lua',
+  install_data('lua/keyboard-select.lua', 'lua/links.lua', 'lua/search.lua',
     install_dir: get_option('datadir') / 'urxvt' / 'lua')
 endif
