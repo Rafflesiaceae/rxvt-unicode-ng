@@ -52,14 +52,25 @@ scrollBar_t::map (int map)
     }
 }
 
+// The native scrollbar owns its own behavior, but shares the central band
+// with the text viewport when Lua bars reserve the surrounding edges.
+static void
+scrollbar_geometry (rxvt_term *term, int &x, int &y, int &height)
+{
+  x = term->option (Opt_scrollBar_right) ? term->szHint.width - term->scrollBar.total_width () : 0;
+  y = 0;
+  height = term->szHint.height;
+#if ENABLE_LUA
+  if (term->lua.bars) term->lua.bars->native_geometry (x, y, height);
+#endif
+}
+
 void
 scrollBar_t::resize ()
 {
   int delayed_init = 0;
-  int window_sb_x = 0;
-
-  if (term->option (Opt_scrollBar_right))
-    window_sb_x = term->szHint.width - total_width ();
+  int window_sb_x, window_sb_y, window_sb_height;
+  scrollbar_geometry (term, window_sb_x, window_sb_y, window_sb_height);
 
   update_data ();
 
@@ -68,9 +79,9 @@ scrollBar_t::resize ()
       /* create the scrollbar window */
       win = XCreateSimpleWindow (term->dpy,
                                  term->parent,
-                                 window_sb_x, 0,
+                                 window_sb_x, window_sb_y,
                                  total_width (),
-                                 term->szHint.height,
+                                 window_sb_height,
                                  0,
                                  term->pix_colors[Color_fg],
                                  term->pix_colors[color ()]);
@@ -86,8 +97,8 @@ scrollBar_t::resize ()
     }
   else
     XMoveResizeWindow (term->dpy, win,
-                       window_sb_x, 0,
-                       total_width (), term->szHint.height);
+                       window_sb_x, window_sb_y,
+                       total_width (), window_sb_height);
 
   show (1);
 
@@ -247,11 +258,13 @@ scrollBar_t::color ()
 void
 scrollBar_t::update_data ()
 {
+  int x, y, height;
+  scrollbar_geometry (term, x, y, height);
 #if defined(PLAIN_SCROLLBAR)
   if (style == SB_STYLE_PLAIN)
     {
       beg = 0;
-      end = term->szHint.height;
+      end = height;
       update = &scrollBar_t::show_plain;
     }
 #endif
@@ -259,7 +272,7 @@ scrollBar_t::update_data ()
   if (style == SB_STYLE_XTERM)
     {
       beg = 0;
-      end = term->szHint.height;
+      end = height;
       update = &scrollBar_t::show_xterm;
     }
 #endif
@@ -267,7 +280,7 @@ scrollBar_t::update_data ()
   if (style == SB_STYLE_NEXT)
     {
       beg = 0;
-      end = term->szHint.height - (SB_BUTTON_TOTAL_HEIGHT + SB_PADDING);
+      end = height - (SB_BUTTON_TOTAL_HEIGHT + SB_PADDING);
       update = &scrollBar_t::show_next;
     }
 #endif
@@ -275,7 +288,7 @@ scrollBar_t::update_data ()
   if (style == SB_STYLE_RXVT)
     {
       beg = (width + 1) + shadow;
-      end = term->szHint.height - beg;
+      end = height - beg;
       update = &scrollBar_t::show_rxvt;
     }
 #endif

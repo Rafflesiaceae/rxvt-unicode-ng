@@ -917,6 +917,10 @@ rxvt_term::init2 (int argc, const char *const *argv)
 
   init_done = 1;
 
+#if ENABLE_LUA
+  if (lua.bars) lua.bars->prepare ();
+#endif
+
   init_command (cmd_argv);
 
   if (pty->pty >= 0)

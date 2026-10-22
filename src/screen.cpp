@@ -2569,6 +2569,9 @@ rxvt_term::scr_remap_chars () noexcept
 void ecb_cold
 rxvt_term::scr_recolor (bool refresh) noexcept
 {
+#if ENABLE_LUA
+  if (lua.bars) lua.bars->invalidate ();
+#endif
   bool transparent = false;
 
 #ifdef HAVE_IMG

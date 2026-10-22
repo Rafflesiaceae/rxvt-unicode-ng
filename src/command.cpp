@@ -1010,6 +1010,10 @@ rxvt_term::flush ()
     }
 #endif
 
+#if ENABLE_LUA
+  if (lua.bars) lua.bars->prepare ();
+#endif
+
   if (want_refresh)
     {
       if (SHOULD_INVOKE (HOOK_LINE_UPDATE))
@@ -1057,6 +1061,10 @@ rxvt_term::flush ()
 #endif
     }
 
+#if ENABLE_LUA
+  // A bar-only frame bypasses scr_refresh and its full terminal presentation.
+  if (lua.bars) lua.bars->paint ();
+#endif
   display->flush ();
 }
 
@@ -1064,7 +1072,11 @@ rxvt_term::flush ()
 void
 rxvt_term::refresh_check ()
 {
-  if (want_refresh && !sync_ev.is_active ())
+  bool pending = want_refresh;
+#if ENABLE_LUA
+  pending = pending || (lua.bars && lua.bars->pending ());
+#endif
+  if (pending && !sync_ev.is_active ())
     {
       if (batch_pending && option (Opt_refreshBatching))
         flush_ev.start (refresh_delay ());
@@ -1464,6 +1476,12 @@ rxvt_term::x_cb (XEvent &ev)
     }
 #endif
 
+#if ENABLE_LUA
+  // Closing a grabbed bar must not forward its orphan release to the PTY.
+  if (lua.bars && lua.bars->consume_pointer (ev))
+    return;
+#endif
+
   if (ev.xany.window == vt
       && SHOULD_INVOKE (HOOK_X_EVENT)
       && HOOK_INVOKE ((this, HOOK_X_EVENT, DT_XEVENT, &ev, DT_END)))
@@ -1624,6 +1642,9 @@ rxvt_term::x_cb (XEvent &ev)
 
       case UnmapNotify:
         mapped = 0;
+#if ENABLE_LUA
+        if (lua.bars) lua.bars->cancel ("unmapped");
+#endif
 #ifdef TEXT_BLINK
         text_blink_ev.stop ();
 #endif

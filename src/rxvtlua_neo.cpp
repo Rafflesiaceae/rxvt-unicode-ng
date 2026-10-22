@@ -1509,6 +1509,7 @@ t_resource_boolean (lua_State *L)
 }
 
 static const luaL_Reg term_methods[] = {
+  { "new_bar",       rxvt_bar_new    },
   { "nrow",          t_nrow          },
   { "ncol",          t_ncol          },
   { "top_row",       t_top_row       },
@@ -2278,6 +2279,7 @@ create_state (rxvt_term *term, const char *dir, char **plugins)
     }
 
   luaL_openlibs (L);
+  rxvt_bar_register (L);
 
   for (int htype = 0; htype < HOOK_NUM; htype++)
     {
@@ -2481,6 +2483,16 @@ invoke_binding (lua_State *L, rxvt_term *term, XEvent *xe, KeySym sym)
 }
 
 bool
+rxvt_lua_interp::call (rxvt_term *term, int nargs, const char *what)
+{
+  rxvt_term *previous = cur_term;
+  cur_term = term;
+  bool ok = pcall (L, nargs, 0, what);
+  cur_term = previous;
+  return ok;
+}
+
+bool
 rxvt_lua_interp::invoke (rxvt_term *term, int htype, ...)
 {
   if (!should_invoke[htype] || !term->lua.ref)
@@ -2580,6 +2592,10 @@ rxvt_lua_interp::invoke (rxvt_term *term, int htype, ...)
     }
   else if (htype == HOOK_DESTROY)
     {
+      // Cancel gestures while the terminal object is still valid in Lua.
+      delete term->lua.bars;
+      term->lua.bars = 0;
+
       // overlays can't outlive their terminal, closing removes them from
       // the list, so search from the start again each time
       for (unsigned int i = 0; i < overlays.size (); )

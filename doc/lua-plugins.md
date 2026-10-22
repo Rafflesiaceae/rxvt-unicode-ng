@@ -12,13 +12,14 @@ loaded as plugins can live in `plugins/lib/` and be loaded with `require`.
 Without any plugin file no Lua state is created at all. With plugins, only
 the hooks they implement are ever called, so unused hooks cost nothing.
 
-Three example plugins are installed to `share/urxvt/lua` (see `src/lua/`):
+Four example plugins are installed to `share/urxvt/lua` (see `src/lua/`):
 
 - `keyboard-select.lua` selects and copies text with vi-like keys (`M-Escape`),
   a port of the keyboard-select perl extension
 - `links.lua` underlines URLs, opens them with Ctrl + click and lets you
   select them from the keyboard (`M-u`)
 - `search.lua` searches incrementally through the whole scrollback (`M-s`)
+- `scrollbar.lua` provides a 4px left scrollbar with a draggable proportional handle
 
 Enable them by copying or linking them into the plugin directory, and change
 their settings (keys, opener, ...) at the top of the files.
@@ -147,6 +148,7 @@ arguments are listed after `t`. X events (`ev`) are tables with `type`,
 | `t:overlay_text (x, y, text [, and_mask, or_mask])` | writes into the overlay |
 | `t:overlay_off ()` | closes the overlay |
 | `t:new_overlay (x, y, w, h [, border [, and_mask, or_mask]])` | a new overlay object, see below |
+| `t:new_bar (options)` | reserves an edge strip and returns a retained bar object, see below |
 | `t:write (data)` | sends data to the program, as if typed |
 | `t:feed (data)` | processes data as if the program had output it |
 | `t:refresh ()` | schedules a redraw, needed after changes outside of hooks, e.g. in timers |
@@ -191,6 +193,55 @@ local status = t:new_overlay (-1, -1, 12, 1, false)
 status:set (0, 0, "-- SELECT --")
 status:show ()
 ```
+
+### Bars
+
+Bars reserve pixels outside the text viewport. Create them in `on_init` so their reservations are included in initial character geometry. Runtime creation or closure keeps the current outer window size and adjusts text rows/columns as necessary on the next scheduled frame. Hidden bars keep their reservation and show terminal background. Bars remain registered even if their Lua references are garbage collected; `close` explicitly releases the reservation. All bars close when their terminal is destroyed.
+
+```lua
+function M.on_init(t)
+  -- Horizontal bars own corners; nested parts inherit the bar's flow axis.
+  t.status_bar = t:new_bar {
+    edge = "bottom", thickness = 24, priority = 0,
+    on_event = function(term, bar, ev)
+      if ev.type == "button_press" and ev.button == 1 then
+        urxvt.warn("clicked " .. (ev.id or "the bar background"))
+      end
+    end,
+  }
+  t.status_bar:submit {
+    bg = "background",
+    children = {
+      { id = "mode", size = { px = 80 }, text = "NORMAL" },
+      { id = "title", size = { ratio = 3 }, text = "Terminal" },
+      { id = "position", size = { ratio = 1 }, text = "Ready" },
+    },
+  }
+end
+```
+
+`edge`, `thickness`, and `priority` are required and fixed for the bar's lifetime. Edges are `"top"`, `"bottom"`, `"left"`, and `"right"`. Thickness is an integer from 1 through 32767 pixels; total reservations must fit X11 geometry limits. Priority is a signed 32-bit integer: smaller numbers are closer to the outside, with creation order breaking ties. `visible` is an optional boolean, defaulting to true; `on_event` is an optional function. Top/bottom bars span the client width and own the corners. Left/right bars occupy the height between them. The independent native scrollbar, if enabled, occupies its own gutter between the corresponding side's bars and the text viewport.
+
+The root of a submitted tree covers the bar. Each child requires a unique nonempty string `id` and `size = { px = n }` or `size = { ratio = r }`. Arrays determine order. Children may have nested `children` arrays; all descendants flow left-to-right in horizontal bars and top-to-bottom in vertical bars. Pixel sizes are nonnegative integers through 32767. Ratios are finite nonnegative numbers. Allocate pixels first, then divide the remainder by ratio. For example, in a 100px container, `4px`, `ratio=1`, and `ratio=3` allocate 4px, 24px, and 72px. Oversized pixel allocations retain their requested lengths and clip at their ancestors. Zero total ratio weight leaves the remainder as container background.
+
+Nodes and the root accept `bg`, `fg`, and `text`. Colors are `"foreground"`, `"background"`, or terminal palette indices. Defaults are terminal background for rectangles and foreground for text. Text is single-line UTF-8, horizontally and vertically centered, unrotated, clipped, and rendered with terminal fonts. Parents paint before their children. No padding, wrapping, or images are provided. Text is limited to 65535 UTF-8 bytes per node; nesting is limited to 64 levels. Unknown fields, invalid numbers/text/colors, duplicate IDs, mixed sizing units, and sparse child arrays raise errors without changing the accepted scene.
+
+`submit` always describes a complete replacement tree: omitted nodes disappear, omitted optional fields reset to defaults, and stable IDs preserve identity through reordering/reparenting. Mutating a table after submission has no effect until the next submission. C++ retains its own values and diffs each full tree in O(N); only differences schedule layout/paint. Reuse tables and avoid submitting when your relevant state has not changed. Drawing is deferred and coalesced by the existing refresh scheduler. A submission in `on_refresh_begin` appears in the same presentation. A bar-only update does not redraw terminal cells.
+
+| Method | Description |
+|---|---|
+| `bar:submit(tree)` | Accept a complete tree and schedule incremental work. |
+| `bar:visible([value])` | Return visibility, changing it first if a boolean is supplied; keep reserved space. |
+| `bar:geometry()` | Return cached `x, y, width, height` in terminal client pixels, without an X query. Runtime reservation changes are reflected after the deferred geometry pass. |
+| `bar:capture(ev)` | In this bar's button-press callback, capture the pointer for the press; return success. Wheel buttons cannot capture. |
+| `bar:release()` | Release this bar's pointer capture. |
+| `bar:close()` | Release capture, reservation, and resources. Repeated close is harmless. Other methods fail after closure. |
+
+`on_event(t, bar, ev)` receives `button_press`, `button_release`, `motion`, `resize`, and `cancel`. Pointer events contain `id` (deepest hit part, or nil for root), bar-local `x, y`, part-local `local_x, local_y`, `x_root, y_root`, `state`, `time`, `shift`, `ctrl`, `meta`, and `button` for button events. Coordinates are pixels and have no terminal row/column interpretation. Events also provide bar `width` and `height`; cancellation provides `reason`. Event tables can be retained. Bar events never fall through to terminal selection, native scrollbar handling, text-window hooks, or application mouse reporting, regardless of the callback return value.
+
+During capture, motion/release target the pressed part and retain out-of-bounds coordinates outside the window. A matching button release automatically ends capture after the callback; other buttons do not. Hiding/closing the bar, removing the captured node, unmapping/destroying the terminal, or a handler error cancels capture. A removed ID recreated later has a new identity. A failing callback is reported with a traceback and disabled. Callbacks may submit, hide, or close their own bar.
+
+To enable the example scrollbar, copy or link `scrollbar.lua` into the plugin directory. Configure its thickness, minimum handle height, wheel step, and priority using the constants at the top. It uses terminal foreground/background, hides on the alternate screen or empty history while keeping its strip, and supports left-button handle dragging, page clicks, and three-line wheel steps while hovered. It never enables, disables, or uses the native scrollbar implementation; both can be active.
 
 ### Detecting alternate-screen applications
 

@@ -323,6 +323,10 @@ have_lua = luajit_dep.found() and pcre2_dep.found()
 if have_lua
   cdata.set('ENABLE_LUA', 1)
   x_deps += [luajit_dep, pcre2_dep]
+  # Retained bar scenes use standard C++ containers. Native-only builds keep
+  # the lightweight libsupc++ link path when the compiler supports it.
+  link_language = 'cpp'
+  supcxx_args = []
 elif luajit_dep.found()
   warning('LuaJIT was found but PCRE2 (libpcre2-8) was not, lua plugins are DISABLED')
 endif

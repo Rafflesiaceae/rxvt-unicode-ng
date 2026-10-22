@@ -93,6 +93,14 @@ They require Xvfb, a C compiler, X11 development headers and Liberation Mono
 for the glyph-overflow check. They trace X11 requests and compare neighboring
 rows in memory without saving screenshots.
 
+# Lua bars
+
+```sh
+python3 tests/bars.py build/src/urxvt
+```
+
+Requires a Lua-enabled build, Xvfb, a C compiler, and X11/XTEST libraries. The harness uses an isolated display and traces geometry, fill, and copy requests without reading pixels or saving screenshots. It covers four-edge docking and priorities, nested sizing, atomic declaration rejection, accumulated damage, bar-only presentation, outside dragging and capture cancellation, runtime reservations, tiny windows, callback closure/errors, core/Xft fonts, the proportional Lua scrollbar, and coexistence with the native scrollbar. Bounded CPU samples include complete Lua submission and native diffing; they exclude presentation and are not end-to-end frame-rate measurements.
+
 # Monitor refresh detection
 
 With RandR support, check the maximum rate across active displays, window moves,

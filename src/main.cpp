@@ -225,6 +225,12 @@ rxvt_term::~rxvt_term ()
 
   emergency_cleanup ();
 
+#if ENABLE_LUA
+  // Also covers initialization failures before HOOK_DESTROY can run.
+  delete lua.bars;
+  lua.bars = 0;
+#endif
+
 #if ENABLE_STYLES
   for (int i = RS_styleCount; --i; )
     if (fontset[i] != fontset[0])
@@ -739,6 +745,16 @@ rxvt_term::window_calc (unsigned int newwidth, unsigned int newheight)
 
   window_vt_x = window_vt_y = int_bwidth;
 
+#if ENABLE_LUA
+  if (lua.bars)
+    {
+      szHint.base_width += lua.bars->inset (BAR_LEFT) + lua.bars->inset (BAR_RIGHT);
+      szHint.base_height += lua.bars->inset (BAR_TOP) + lua.bars->inset (BAR_BOTTOM);
+      window_vt_x += lua.bars->inset (BAR_LEFT);
+      window_vt_y += lua.bars->inset (BAR_TOP);
+    }
+#endif
+
   if (scrollBar.state)
     {
       int sb_w = scrollBar.total_width ();
@@ -753,10 +769,10 @@ rxvt_term::window_calc (unsigned int newwidth, unsigned int newheight)
   szHint.min_width  = szHint.base_width + szHint.width_inc;
   szHint.min_height = szHint.base_height + szHint.height_inc;
 
-  if (newwidth && newwidth - szHint.base_width < max_width)
+  if (newwidth)
     {
-      szHint.width = newwidth;
-      width = newwidth - szHint.base_width;
+      szHint.width = min (newwidth, max_width + szHint.base_width);
+      width = max (1, szHint.width - szHint.base_width);
     }
   else
     {
@@ -764,10 +780,10 @@ rxvt_term::window_calc (unsigned int newwidth, unsigned int newheight)
       szHint.width = szHint.base_width + width;
     }
 
-  if (newheight && newheight - szHint.base_height < max_height)
+  if (newheight)
     {
-      szHint.height = newheight;
-      height = newheight - szHint.base_height;
+      szHint.height = min (newheight, max_height + szHint.base_height);
+      height = max (1, szHint.height - szHint.base_height);
     }
   else
     {
@@ -781,8 +797,9 @@ rxvt_term::window_calc (unsigned int newwidth, unsigned int newheight)
   if (recalc_y)
     szHint.y += DisplayHeight (dpy, display->screen) - szHint.height - 2 * ext_bwidth;
 
-  ncol = width  / fwidth;
-  nrow = height / fheight;
+  // A forced undersized window must not underflow into huge X allocations.
+  ncol = max (1, width / fwidth);
+  nrow = max (1, height / fheight);
 
   // When the size of the vt window is not a multiple of the cell
   // size, i.e., when the wm does not honour our size hints, there are
@@ -792,6 +809,9 @@ rxvt_term::window_calc (unsigned int newwidth, unsigned int newheight)
   // vt window so as to avoid creating gaps.
   vt_width  = ncol * fwidth;
   vt_height = nrow * fheight;
+#if ENABLE_LUA
+  if (lua.bars) lua.bars->dock ();
+#endif
 }
 
 /*----------------------------------------------------------------------*/
@@ -889,6 +909,9 @@ rxvt_term::set_fonts ()
 
   if (parent)
     {
+#if ENABLE_LUA
+      if (lua.bars) lua.bars->invalidate (true);
+#endif
       resize_all_windows (0, 0, 0);
       scr_remap_chars ();
       scr_touch (true);
@@ -1093,6 +1116,11 @@ rxvt_term::resize_all_windows (unsigned int newwidth, unsigned int newheight, in
   int fix_screen;
   int old_width  = szHint.width;
   int old_height = szHint.height;
+#if ENABLE_LUA
+  bool bar_geometry = lua.bars && lua.bars->geometry_dirty;
+#else
+  bool bar_geometry = false;
+#endif
 
   window_calc (newwidth, newheight);
 
@@ -1161,7 +1189,7 @@ rxvt_term::resize_all_windows (unsigned int newwidth, unsigned int newheight, in
 
   fix_screen = ncol != prev_ncol || nrow != prev_nrow;
 
-  if (fix_screen || newwidth != old_width || newheight != old_height)
+  if (bar_geometry || fix_screen || newwidth != old_width || newheight != old_height)
     {
       if (scrollBar.state)
         scrollBar.resize ();
