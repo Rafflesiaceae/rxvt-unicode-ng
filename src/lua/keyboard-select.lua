@@ -41,6 +41,9 @@ local SEARCH_KEY = nil
 -- character classes for the word motions, like \s, \w and the rest in the
 -- regular expressions of the perl version
 local SPACE, WORD, PUNCT = 0, 1, 2
+local SPACE_RE, WORD_RE = urxvt.regex ("^\\s"), urxvt.regex ("^\\w")
+-- search texts with upper case letters are case-sensitive
+local UPPER_RE = urxvt.regex ("[[:upper:]]")
 
 -- the keys of move_cursor, those in SCROLL_KEYS only with Control
 local CURSOR_KEYS = { g = true, G = true, ["0"] = true, ["^"] = true, ["$"] = true, H = true, M = true, L = true }
@@ -96,9 +99,9 @@ function Line:classes ()
     for i, cell in ipairs (self:cells ()) do
       if cell == "" then
         classes[i] = classes[i - 1] or SPACE
-      elseif cell == " " or cell == "\t" then
+      elseif SPACE_RE:find (cell) then
         classes[i] = SPACE
-      elseif cell:byte () >= 128 or cell:find ("^[%w_]") then
+      elseif WORD_RE:find (cell) then
         classes[i] = WORD
       else
         classes[i] = PUNCT
@@ -403,33 +406,32 @@ end
 
 -- search
 
--- the literal pattern, case-insensitive unless it contains upper case
+-- the search text as literal pattern, case-insensitive unless it contains
+-- upper case
 local function set_pattern (ks, text)
   if text ~= "" then
-    ks.fold = not text:find ("%u")
-    ks.pattern = ks.fold and text:lower () or text
+    ks.pattern = urxvt.regex (urxvt.regex_escape (text), UPPER_RE:find (text) and "" or "i")
   else
     ks.pattern = nil
   end
 end
 
--- the start and end of the last match in text that ends before byte limit,
--- matches don't overlap like with perl's m//g
+-- the start of the last match in text that ends before byte limit, matches
+-- don't overlap like with perl's m//g
 local function last_match (text, pattern, limit)
-  local found, pos = nil, 1
-  while true do
-    local s, e = text:find (pattern, pos, true)
-    if not s or e >= limit then return found end
-    found, pos = s, e + 1
+  local found
+  for s, e in pattern:gfind (text) do
+    if e >= limit then break end
+    found = s
   end
+  return found
 end
 
 local function find_next (t, ks, dir)
   if not ks.pattern then return false end
   dir = dir or ks.search_dir
 
-  local pattern, fold = ks.pattern, ks.fold
-  local function prepare (text) return fold and text:lower () or text end
+  local pattern = ks.pattern
 
   local cr, cc = t:cursor ()
   local ln = line (t, cr)
@@ -440,9 +442,9 @@ local function find_next (t, ks, dir)
   local byte
 
   if dir > 0 then
-    byte = prepare (text):find (pattern, starts[math.min (offset, ln.l) + 1], true)
+    byte = pattern:find (text, starts[math.min (offset, ln.l) + 1])
   else
-    byte = last_match (prepare (text), pattern, starts[math.max (0, math.min (offset, ln.l)) + 1])
+    byte = last_match (text, pattern, starts[math.max (0, math.min (offset, ln.l)) + 1])
   end
 
   -- check the other lines with the plain row texts first, which is much
@@ -455,13 +457,13 @@ local function find_next (t, ks, dir)
     local parts = {}
     for r = beg, last do parts[#parts + 1] = (t:line (r)) end
 
-    if prepare (table.concat (parts)):find (pattern, 1, true) then
+    if pattern:find (table.concat (parts)) then
       ln = line (t, row)
       text, starts = ln:text ()
       if dir > 0 then
-        byte = prepare (text):find (pattern, 1, true)
+        byte = pattern:find (text)
       else
-        byte = last_match (prepare (text), pattern, math.huge)
+        byte = last_match (text, pattern, math.huge)
       end
     end
 
