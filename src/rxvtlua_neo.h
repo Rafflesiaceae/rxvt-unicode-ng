@@ -42,6 +42,7 @@ enum hook_type {
 };
 
 struct lua_State;
+struct rxvt_selection;
 
 // per terminal state, must be zero-initialised
 struct rxvt_lua_term
@@ -58,6 +59,8 @@ struct rxvt_lua_interp
   // the terminal. Returns whether lua is active.
   bool init (rxvt_term *term);
   bool invoke (rxvt_term *term, int htype, ...);
+  // hands the text of a t:selection_fetch request to its lua function
+  void selection_finish (rxvt_selection *sel, char *data, unsigned int len);
 };
 
 extern struct rxvt_lua_interp rxvt_lua;

@@ -1073,6 +1073,9 @@ rxvt_selection::finish (char *data, unsigned int len)
       stop (); // we do not really trust perl callbacks
       rxvt_perl.selection_finish (this, data, len);
     }
+#elif ENABLE_LUA
+  else
+    rxvt_lua.selection_finish (this, data, len);
 #endif
 }
 

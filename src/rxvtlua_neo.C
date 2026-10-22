@@ -1367,6 +1367,106 @@ t_selection_request (lua_State *L)
   return 0;
 }
 
+// selection requests of t:selection_fetch, which hand the text to a lua
+// function instead of pasting it, the cb_sv of the rxvt_selection
+struct lua_fetch
+{
+  rxvt_selection *req;
+  rxvt_term *term;
+  int fn_ref;
+};
+
+static vector<lua_fetch *> fetches;
+
+// Removes a fetch from the list and frees it with its request, without
+// calling its function, e.g. when its terminal is destroyed.
+static void
+fetch_free (lua_State *L, lua_fetch *f)
+{
+  for (unsigned int i = 0; i < fetches.size (); i++)
+    if (fetches[i] == f)
+      {
+        fetches.erase (fetches.begin () + i);
+        break;
+      }
+
+  luaL_unref (L, LUA_REGISTRYINDEX, f->fn_ref);
+  delete f->req;
+  delete f;
+}
+
+// t:selection_fetch (clipboard, fn [, time]) -> whether it was requested
+// Requests the PRIMARY (or CLIPBOARD) selection like t:selection_request,
+// but calls fn (text) with it instead of pasting it into the program, or
+// fn (nil) if there is none. Only one fetch per terminal can be pending,
+// false is returned while there is one.
+static int
+t_selection_fetch (lua_State *L)
+{
+  rxvt_term *term = check_term (L);
+  bool clipboard = lua_toboolean (L, 2);
+  luaL_checktype (L, 3, LUA_TFUNCTION);
+  Time tm = check_time (L, 4);
+
+  for (unsigned int i = 0; i < fetches.size (); i++)
+    if (fetches[i]->term == term)
+      {
+        lua_pushboolean (L, 0);
+        return 1;
+      }
+
+  // a property of its own, so a paste running at the same time does not
+  // overwrite the data
+  Atom prop = XInternAtom (term->dpy, "_URXVT_LUA_SELECTION", False);
+
+  lua_fetch *f = new lua_fetch;
+  f->term = term;
+  lua_pushvalue (L, 3);
+  f->fn_ref = luaL_ref (L, LUA_REGISTRYINDEX);
+  f->req = new rxvt_selection (term->display, clipboard ? Sel_Clipboard : Sel_Primary, tm, term->vt, prop, term);
+  f->req->cb_sv = f;
+  fetches.push_back (f);
+
+  // run () may already finish (and free) the request, e.g. when there is
+  // no selection owner but a cut buffer
+  f->req->run ();
+
+  lua_pushboolean (L, 1);
+  return 1;
+}
+
+// called by rxvt_selection::finish for the requests of t:selection_fetch,
+// data is in the locale encoding or 0 if there is no selection
+void
+rxvt_lua_interp::selection_finish (rxvt_selection *sel, char *data, unsigned int len)
+{
+  lua_fetch *f = (lua_fetch *)sel->cb_sv;
+  rxvt_term *term = f->term;
+  int base = lua_gettop (L);
+
+  lua_rawgeti (L, LUA_REGISTRYINDEX, f->fn_ref);
+
+  if (data)
+    {
+      SET_LOCALE (term->locale);
+      wchar_t *w = rxvt_mbstowcs (data, len);
+      push_wcs (L, w, wcslen (w));
+      free (w);
+    }
+  else
+    lua_pushnil (L);
+
+  // freed before the call, so the function can start another fetch
+  fetch_free (L, f);
+
+  rxvt_term *prev_term = cur_term;
+  cur_term = term;
+  pcall (L, 1, 0, "selection_fetch");
+  cur_term = prev_term;
+
+  lua_settop (L, base);
+}
+
 // t:resource (name) -> value of the X resource URxvt.<name>, or nil
 static int
 t_resource (lua_State *L)
@@ -1448,6 +1548,7 @@ static const luaL_Reg term_methods[] = {
   { "selection_grab", t_selection_grab },
   { "selection_clear", t_selection_clear },
   { "selection_request", t_selection_request },
+  { "selection_fetch", t_selection_fetch },
   { "resource",      t_resource      },
   { "resource_boolean", t_resource_boolean },
   { 0, 0 }
@@ -2484,6 +2585,13 @@ rxvt_lua_interp::invoke (rxvt_term *term, int htype, ...)
       for (unsigned int i = 0; i < overlays.size (); )
         if (overlays[i]->term == term)
           overlays[i]->close (L);
+        else
+          i++;
+
+      // neither can fetches, their functions are not called
+      for (unsigned int i = 0; i < fetches.size (); )
+        if (fetches[i]->term == term)
+          fetch_free (L, fetches[i]);
         else
           i++;
 

@@ -158,6 +158,7 @@ arguments are listed after `t`. X events (`ev`) are tables with `type`,
 | `t:selection_grab ([clipboard [, time]])` | claims PRIMARY (or CLIPBOARD) with the current text, returns whether that worked |
 | `t:selection_clear ([clipboard])` | forgets the PRIMARY text and removes the selection highlight (or forgets the CLIPBOARD text) |
 | `t:selection_request ([clipboard [, time]])` | pastes PRIMARY (or CLIPBOARD) into the program |
+| `t:selection_fetch (clipboard, fn [, time])` | requests PRIMARY (or CLIPBOARD) and calls `fn (text)` with it instead of pasting it, or `fn (nil)` if there is none. `fn` runs once the owner has answered, which may be right away. Returns `false` without requesting anything while another fetch of the terminal is pending. Pass the key or button event's `ev.time` as `time` where there is one. |
 | `t:resource (name)` | the X resource `URxvt.<name>`, or nil |
 | `t:resource_boolean (name)` | the X resource as a boolean: true for `true`, `yes`, `on` and `1` (in any case), false otherwise, nil if it is not set |
 
