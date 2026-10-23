@@ -4,15 +4,68 @@ The meson build embeds LuaJIT (`-Dlua=auto`, on whenever LuaJIT and PCRE2 are
 found) as a lightweight replacement for the perl extensions of the autoconf
 build.
 
-Every `*.lua` file in `$XDG_CONFIG_HOME/urxvt/plugins` (by default
-`~/.config/urxvt/plugins`) is loaded once at startup, in alphabetical order.
+## Startup configuration
+
+`$XDG_CONFIG_HOME/nrxvt/init.lua` (default `~/.config/nrxvt/init.lua`) is
+loaded automatically if it exists, before plugins and before fonts, window
+geometry, visual selection, and the child process are initialized. An
+`init.lua` works without any plugins. Syntax and execution errors report a
+traceback where available and abort startup rather than silently applying
+an incomplete configuration.
+
+The implicit `nrxvt` global provides typed startup options using the
+existing X resource names:
+
+```lua
+-- Font fallback order and scrollback capacity.
+nrxvt.opt.font = "xft:monospace:size=11"
+nrxvt.opt.saveLines = 50000
+nrxvt.opt.scrollBar = false
+nrxvt.opt.background = "#272822"
+nrxvt.opt.color16 = "#fd971f"
+
+-- Resource names containing punctuation use bracket notation.
+nrxvt.opt["print-pipe"] = "cat > /tmp/nrxvt-screen.txt"
+
+-- Extension resources and legacy keysym actions use a separate namespace.
+nrxvt.resources["keyboard-select.clipboard"] = true
+nrxvt.resources["keysym.C-S-v"] = "eval:paste_clipboard"
+```
+
+`nrxvt.opt` accepts every built-in resource available in the build, plus
+all supported indexed palette colors. Boolean resources require Lua
+booleans, numeric resources require finite Lua numbers, and other
+resources require strings. Unknown or unavailable option names raise an
+error. Assigning `nil` removes a Lua default. Reads return the configured
+Lua default, or `nil` if none was assigned, rather than the effective
+terminal state.
+
+Precedence is built-in defaults, Xresources, Lua configuration, then
+explicit command-line options (including `-xrm`). Lua defaults are copied
+to each terminal without modifying the shared X display's resource
+database. `nrxvt.resources` accepts strings, booleans, or finite numbers
+for arbitrary extension resources; these are visible to `t:resource` and
+`t:resource_boolean`. Built-in resources belong in `nrxvt.opt`.
+
+Configuration and plugins are loaded once per interpreter. Startup option
+assignments are allowed during that load; later writes raise an error.
+Live reconfiguration is not provided by this interface. Bind callbacks
+with `nrxvt.bind`, and optionally return a table of hooks from `init.lua`,
+just as a plugin does. Helper modules can live in `nrxvt/lua/?.lua` or
+`nrxvt/lua/?/init.lua` below the configuration directory and be loaded with
+`require`.
+
+## Loading plugins
+
+Every `*.lua` file in `$XDG_CONFIG_HOME/nrxvt/plugins` (by default
+`~/.config/nrxvt/plugins`) is loaded once at startup, in alphabetical order.
 Files starting with a dot are skipped. Helper modules that should not be
 loaded as plugins can live in `plugins/lib/` and be loaded with `require`.
 
-Without any plugin file no Lua state is created at all. With plugins, only
-the hooks they implement are ever called, so unused hooks cost nothing.
+Without an `init.lua` or any plugin file no Lua state is created. Only
+registered hooks are called, so unused hooks cost nothing.
 
-Four example plugins are installed to `share/urxvt/lua` (see `src/lua/`):
+Four example plugins are installed to `share/nrxvt/lua` (see `src/lua/`):
 
 - `keyboard-select.lua` selects and copies text with vi-like keys (`M-Escape`),
   a port of the keyboard-select perl extension

@@ -1,8 +1,8 @@
 /*
  * rxvtlua_neo.h - embedded LuaJIT plugin system
  *
- * Plugins are the *.lua files in $XDG_CONFIG_HOME/urxvt/plugins (default
- * ~/.config/urxvt/plugins), see doc/lua-plugins.md for the API.
+ * Plugins are the *.lua files in $XDG_CONFIG_HOME/nrxvt/plugins (default
+ * ~/.config/nrxvt/plugins), see doc/lua-plugins.md for the API.
  *
  * The hooks reuse the HOOK_INVOKE/SHOULD_INVOKE call sites of the perl
  * interface, so this header provides the same macros and enums as
@@ -51,15 +51,17 @@ struct rxvt_lua_term
 {
   int ref; // registry reference of the lua terminal object, 0 if none
   rxvt_bar_manager *bars; // allocated lazily by t:new_bar
+  XrmDatabase resources; // terminal-local Lua defaults, released at destruction
+  XrmDatabase overrides; // explicit -xrm values, kept separate from defaults
 };
 
 struct rxvt_lua_interp
 {
-  lua_State *L; // 0 unless at least one plugin was found
+  lua_State *L; // 0 unless init.lua or at least one plugin was found
   uint8_t should_invoke[HOOK_NUM];
 
-  // Loads the plugins on the first call and creates the lua object of
-  // the terminal. Returns whether lua is active.
+  // Loads init.lua and plugins on the first call, applies defaults, and
+  // creates the terminal object. Returns whether Lua is active.
   bool init (rxvt_term *term);
   bool invoke (rxvt_term *term, int htype, ...);
   // Calls a prepared bar callback with the same context and error handling

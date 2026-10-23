@@ -6,7 +6,7 @@
 --   between the URLs on screen, Return/o opens, y copies to the clipboard,
 --   Escape/q quits
 --
--- Copy or link this file into ~/.config/urxvt/plugins to enable it.
+-- Copy or link this file into ~/.config/nrxvt/plugins to enable it.
 
 local OPENER = { "xdg-open" }
 local SELECT_KEY = "M-u"

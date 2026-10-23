@@ -192,7 +192,7 @@ class X11:
 class Terminal:
     def __init__(self, binary, directory, env, x11, scrollbar=False, native=False, font="fixed"):
         self.directory = directory
-        plugins = directory / "urxvt/plugins"
+        plugins = directory / "nrxvt/plugins"
         plugins.mkdir(parents=True)
         (plugins / "control.lua").write_text(CONTROLLER)
         if scrollbar:

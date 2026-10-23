@@ -10,7 +10,7 @@
 --   Return          leave the search, keeping the view
 --   Escape, C-g     leave the search, restoring the view
 --
--- Copy or link this file into ~/.config/urxvt/plugins to enable it.
+-- Copy or link this file into ~/.config/nrxvt/plugins to enable it.
 
 local SEARCH_KEY = "M-s"
 

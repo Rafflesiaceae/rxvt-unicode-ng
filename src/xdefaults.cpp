@@ -292,6 +292,40 @@ optList[] = {
 #undef SWCH
 #undef BOOL
 
+#if ENABLE_LUA
+// Types are string (1), boolean (2), and number (3). Using optList keeps
+// feature-dependent resources and their spellings in a single registry.
+int
+rxvt_term::config_resource (const char *name, int &option, int &type)
+{
+  option = 0;
+  type = 1;
+
+  for (unsigned int i = 0; i < ecb_array_length (optList); i++)
+    if (optList[i].kw && !optList_isInfo (i)
+        && !strcmp (name, optList[i].kw))
+      {
+        option = optList_isBool (i) ? optList[i].index : 0;
+        type = optList_isBool (i) ? 2
+               : optList[i].arg && (!strcmp (optList[i].arg, "number")
+                                    || !strcmp (optList[i].arg, "windowid")) ? 3 : 1;
+        return optList[i].doff;
+      }
+
+  // The registry names the ANSI colors explicitly; Lua can also configure
+  // the extended palette supported by this build.
+  if (!strncmp (name, "color", 5) && isdigit ((unsigned char)name[5]))
+    {
+      char *end;
+      long color = strtol (name + 5, &end, 10);
+      if (!*end && color >= 0 && color <= maxTermCOLOR - minCOLOR)
+        return Rs_color + minCOLOR + color;
+    }
+
+  return -1;
+}
+#endif
+
 static const char releasestring[] = "rxvt-unicode (" RXVTNAME ") v" VERSION " - released: " DATE "\n";
 static const char optionsstring[] = "options: "
 #if ENABLE_PERL
@@ -762,9 +796,22 @@ get_res (XrmDatabase database, const char *program, const char *option)
 }
 
 const char *
-rxvt_term::x_resource (const char *name)
+rxvt_term::x_resource (const char *name, XrmDatabase database)
 {
-  XrmDatabase database = XrmGetDatabase (dpy);
+  if (!database)
+    {
+#if ENABLE_LUA
+      // Command-line and Lua resources belong to the terminal, not the
+      // shared X display; explicit overrides take precedence.
+      if (lua.overrides)
+        if (const char *value = x_resource (name, lua.overrides))
+          return value;
+      if (lua.resources)
+        if (const char *value = get_res (lua.resources, rs[Rs_name], name))
+          return value;
+#endif
+      database = XrmGetDatabase (dpy);
+    }
 
   const char *p = get_res (database, rs[Rs_name], name);
   const char *p0 = get_res (database, "!INVALIDPROGRAMMENAMEDONTMATCH!", name);
@@ -788,8 +835,14 @@ void
 rxvt_term::extract_resources ()
 {
 #ifndef NO_RESOURCES
+#if ENABLE_LUA
+  // Retain command-line resources per terminal, including on X displays
+  // with no resource database. Xlib retains ownership of its own database.
+  lua.overrides = option_db;
+#else
   XrmDatabase database = XrmGetDatabase (dpy);
   XrmMergeDatabases (option_db, &database);
+#endif
   option_db = NULL;
   /*
    * Query resources for options that affect us
@@ -799,7 +852,8 @@ rxvt_term::extract_resources ()
       int s;
       const char *kw = optList[entry].kw;
 
-      if (kw == NULL || rs[optList[entry].doff] != NULL)
+      // Help-only entries such as xrm do not have a resource slot.
+      if (kw == NULL || optList_isInfo (entry) || rs[optList[entry].doff] != NULL)
         continue; // previously set
 
       const char *p = x_resource (kw);
@@ -937,6 +991,26 @@ rxvt_term::enumerate_resources (void (*cb)(rxvt_term *, const char *, const char
   name_prefix[0] = class_prefix[0] = XrmStringToName (rs[Rs_name]);
   XrmEnumerateDatabase (database, name_prefix, class_prefix,
                         XrmEnumAllLevels, rxvt_enumerate_helper, (XPointer)&closure);
+#if ENABLE_LUA
+  // Enumerate Lua keys last so they replace lower-priority Xresources.
+  if (lua.resources)
+    XrmEnumerateDatabase (lua.resources, name_prefix, class_prefix,
+                          XrmEnumAllLevels, rxvt_enumerate_helper, (XPointer)&closure);
+  if (lua.overrides)
+    {
+#ifdef RESFALLBACK
+      name_prefix[0] = class_prefix[0] = XrmStringToName (RESFALLBACK);
+      XrmEnumerateDatabase (lua.overrides, name_prefix, class_prefix,
+                            XrmEnumAllLevels, rxvt_enumerate_helper, (XPointer)&closure);
+#endif
+      name_prefix[0] = class_prefix[0] = XrmStringToName (RESCLASS);
+      XrmEnumerateDatabase (lua.overrides, name_prefix, class_prefix,
+                            XrmEnumAllLevels, rxvt_enumerate_helper, (XPointer)&closure);
+      name_prefix[0] = class_prefix[0] = XrmStringToName (rs[Rs_name]);
+      XrmEnumerateDatabase (lua.overrides, name_prefix, class_prefix,
+                            XrmEnumAllLevels, rxvt_enumerate_helper, (XPointer)&closure);
+    }
+#endif
 #endif
 }
 

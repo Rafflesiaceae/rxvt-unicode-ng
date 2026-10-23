@@ -253,7 +253,7 @@ def run(args, directory, report):
             report['startup_phases_ms'] = startup_profile(args.profile_binary, env, terminal, args)
 
         if args.plugins:
-            target = directory / 'plugins/urxvt/plugins'
+            target = directory / 'plugins/nrxvt/plugins'
             target.mkdir(parents=True)
             for source in args.plugins.glob('*.lua'):
                 shutil.copy2(source, target / source.name)

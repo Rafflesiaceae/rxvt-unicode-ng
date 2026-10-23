@@ -229,6 +229,8 @@ rxvt_term::~rxvt_term ()
   // Also covers initialization failures before HOOK_DESTROY can run.
   delete lua.bars;
   lua.bars = 0;
+  XrmDestroyDatabase (lua.resources);
+  XrmDestroyDatabase (lua.overrides);
 #endif
 
 #if ENABLE_STYLES

@@ -638,6 +638,11 @@ rxvt_term::init_resources (int argc, const char *const *argv)
   xa = display->xa;
 
   set (display);
+#if ENABLE_LUA
+  // Lua defaults must precede resource extraction and visual selection;
+  // explicit command-line values have already been parsed and take priority.
+  rxvt_lua.init (this);
+#endif
   extract_resources ();
 
 #if ENABLE_FRILLS
@@ -665,7 +670,7 @@ rxvt_term::init_resources (int argc, const char *const *argv)
     }
 #endif
 #if ENABLE_LUA
-  if (rxvt_lua.init (this))
+  if (lua.ref)
     HOOK_INVOKE ((this, HOOK_INIT, DT_END));
 #endif
 

@@ -2,18 +2,12 @@
  * File:	rxvtlua_neo.cpp - embedded LuaJIT plugin system
  *----------------------------------------------------------------------*
  *
- * Loads every *.lua file from $XDG_CONFIG_HOME/urxvt/plugins (default
- * ~/.config/urxvt/plugins) when the first terminal is created. Each plugin
- * returns a table of hook functions (on_start, on_key_press, ...) which get
- * called with a terminal object and the hook arguments. See
- * doc/lua-plugins.md for the API.
+ * Loads $XDG_CONFIG_HOME/nrxvt/init.lua and the *.lua plugins below
+ * nrxvt/plugins (default ~/.config/nrxvt). Plugins return hook functions
+ * called with a terminal object and hook arguments. See doc/lua-plugins.md.
  *
- * Startup cost and per-event overhead are kept minimal:
- *  - without any plugin file no lua state is ever created, the only cost
- *    is a single opendir() per terminal;
- *  - hooks that no plugin implements are skipped by a flag check at the
- *    call site (SHOULD_INVOKE/HOOK_INVOKE), before any argument conversion;
- *  - everything is plain lua C API, no lua code runs besides the plugins.
+ * With neither configuration nor plugins no Lua state is created. Hooks
+ * with no handlers are skipped before any argument conversion.
  *----------------------------------------------------------------------*/
 
 #include "../config.h"
@@ -26,6 +20,7 @@
 
 #include <dirent.h>
 #include <fcntl.h>
+#include <math.h>
 #include <new>
 #include <pwd.h>
 #include <signal.h>
@@ -55,6 +50,12 @@ static int traceback_ref;       // debug.traceback
 // the terminal the current hook/plugin code runs for, needed by functions
 // that are not methods (nrxvt.bind needs a terminal to parse keysyms)
 static rxvt_term *cur_term;
+
+// Configuration is evaluated once; its defaults are applied independently
+// to each terminal before resource-dependent initialization begins.
+static int config_options_ref;
+static int config_resources_ref;
+static bool config_loading;
 
 // key bindings registered with nrxvt.bind
 struct lua_binding
@@ -2162,14 +2163,149 @@ static const luaL_Reg urxvt_functions[] = {
 /////////////////////////////////////////////////////////////////////////////
 // plugin loading
 
-// $XDG_CONFIG_HOME/urxvt/plugins, or ~/.config/urxvt/plugins
+// Typed option proxies retain Lua values without shadowing __newindex.
+static int
+config_index (lua_State *L)
+{
+  const char *name = luaL_checkstring (L, 2);
+  if (lua_toboolean (L, lua_upvalueindex (2)))
+    {
+      int option, type;
+      if (rxvt_term::config_resource (name, option, type) < 0)
+        return luaL_error (L, "unknown or unavailable option '%s'", name);
+    }
+
+  lua_pushvalue (L, 2);
+  lua_rawget (L, lua_upvalueindex (1));
+  return 1;
+}
+
+static int
+config_newindex (lua_State *L)
+{
+  if (!config_loading)
+    return luaL_error (L, "configuration can only be changed during startup");
+
+  size_t len;
+  const char *name = luaL_checklstring (L, 2, &len);
+  if (!len || len > 400 || memchr (name, 0, len))
+    return luaL_error (L, "invalid resource name");
+  for (size_t i = 0; i < len; i++)
+    if (!isalnum ((unsigned char)name[i]) && !strchr ("._-+", name[i]))
+      return luaL_error (L, "invalid resource name '%s'", name);
+
+  int option, type;
+  int resource = rxvt_term::config_resource (name, option, type);
+  bool core = lua_toboolean (L, lua_upvalueindex (2));
+  if (core && resource < 0)
+    return luaL_error (L, "unknown or unavailable option '%s'", name);
+  if (!core && resource >= 0)
+    return luaL_error (L, "use nrxvt.opt for built-in option '%s'", name);
+
+  if (!lua_isnil (L, 3))
+    {
+      int value_type = lua_type (L, 3);
+      int expected = type == 2 ? LUA_TBOOLEAN : type == 3 ? LUA_TNUMBER : LUA_TSTRING;
+      if (core ? value_type != expected
+               : value_type != LUA_TSTRING && value_type != LUA_TNUMBER && value_type != LUA_TBOOLEAN)
+        return luaL_error (L, "invalid value type for '%s'", name);
+      if (value_type == LUA_TNUMBER && !isfinite (lua_tonumber (L, 3)))
+        return luaL_error (L, "'%s' requires a finite number", name);
+      if (value_type == LUA_TSTRING)
+        {
+          size_t length;
+          const char *value = lua_tolstring (L, 3, &length);
+          if (memchr (value, 0, length))
+            return luaL_error (L, "'%s' cannot contain NUL bytes", name);
+        }
+    }
+
+  lua_pushvalue (L, 2);
+  lua_pushvalue (L, 3);
+  lua_rawset (L, lua_upvalueindex (1));
+  return 0;
+}
+
+// Keep the backing tables private so all normal assignments are validated.
+static void
+register_config (lua_State *L, const char *name, int &ref, bool core)
+{
+  lua_newtable (L);
+  ref = luaL_ref (L, LUA_REGISTRYINDEX);
+  lua_newtable (L);
+  lua_newtable (L);
+  lua_rawgeti (L, LUA_REGISTRYINDEX, ref);
+  lua_pushboolean (L, core);
+  lua_pushcclosure (L, config_index, 2);
+  lua_setfield (L, -2, "__index");
+  lua_rawgeti (L, LUA_REGISTRYINDEX, ref);
+  lua_pushboolean (L, core);
+  lua_pushcclosure (L, config_newindex, 2);
+  lua_setfield (L, -2, "__newindex");
+  lua_pushliteral (L, "configuration");
+  lua_setfield (L, -2, "__metatable");
+  lua_setmetatable (L, -2);
+  lua_setfield (L, -2, name);
+}
+
+// Apply defaults before Xresources are extracted. Existing resource slots
+// and matching -xrm entries are explicit command-line overrides.
+static void
+apply_config (lua_State *L, rxvt_term *term, int ref)
+{
+  lua_rawgeti (L, LUA_REGISTRYINDEX, ref);
+  lua_pushnil (L);
+  while (lua_next (L, -2))
+    {
+      const char *name = lua_tostring (L, -2);
+      int option, type;
+      int resource = rxvt_term::config_resource (name, option, type);
+      bool overridden = resource >= 0 && term->rs[resource];
+      const char *explicit_value = 0;
+#ifndef NO_RESOURCES
+      if (term->option_db)
+        explicit_value = term->x_resource (name, term->option_db);
+#endif
+      if (!overridden && (!explicit_value || resource >= 0))
+        {
+          // Convert a copy: lua_next requires its key to remain unchanged.
+          lua_pushvalue (L, -1);
+          const char *value = explicit_value ? explicit_value : lua_isboolean (L, -1)
+                              ? lua_toboolean (L, -1) ? "true" : "false"
+                              : lua_tostring (L, -1);
+          if (resource >= 0)
+            {
+              char *copy = strdup (value);
+              term->allocated.push_back (copy);
+              term->rs[resource] = copy;
+              if (type == 2)
+                term->set_option (option, !strcasecmp (value, "true") || !strcasecmp (value, "yes")
+                                         || !strcasecmp (value, "on") || !strcmp (value, "1"));
+            }
+
+          // Explicit resources are retained separately, so extension and
+          // extended-palette overrides keep their original precedence.
+          if (!explicit_value)
+            {
+              char *key = rxvt_temp_buf<char> (strlen (term->rs[Rs_name]) + strlen (name) + 2);
+              sprintf (key, "%s.%s", term->rs[Rs_name], name);
+              XrmPutStringResource (&term->lua.resources, key, value);
+            }
+          lua_pop (L, 1);
+        }
+      lua_pop (L, 1);
+    }
+  lua_pop (L, 1);
+}
+
+// $XDG_CONFIG_HOME/nrxvt, or ~/.config/nrxvt
 static bool
-plugin_dir (char *buf, size_t size)
+config_dir (char *buf, size_t size)
 {
   const char *config = getenv ("XDG_CONFIG_HOME");
 
   if (config && *config == '/')
-    return snprintf (buf, size, "%s/urxvt/plugins", config) < (int)size;
+    return snprintf (buf, size, "%s/nrxvt", config) < (int)size;
 
   const char *home = getenv ("HOME");
 
@@ -2179,7 +2315,7 @@ plugin_dir (char *buf, size_t size)
       home = pw ? pw->pw_dir : 0;
     }
 
-  return home && snprintf (buf, size, "%s/.config/urxvt/plugins", home) < (int)size;
+  return home && snprintf (buf, size, "%s/.config/nrxvt", home) < (int)size;
 }
 
 static int
@@ -2268,7 +2404,7 @@ register_hooks (lua_State *L, const char *name)
 }
 
 static void
-create_state (rxvt_term *term, const char *dir, char **plugins)
+create_state (rxvt_term *term, const char *config, const char *dir, const char *init, char **plugins)
 {
   lua_State *L = luaL_newstate ();
 
@@ -2334,6 +2470,8 @@ create_state (rxvt_term *term, const char *dir, char **plugins)
   luaL_register (L, 0, urxvt_functions);
   lua_pushvalue (L, -1);
   lua_setglobal (L, "nrxvt");
+  register_config (L, "opt", config_options_ref, true);
+  register_config (L, "resources", config_resources_ref, false);
   lua_pushstring (L, VERSION);
   lua_setfield (L, -2, "version");
   lua_pushstring (L, dir);
@@ -2360,9 +2498,9 @@ create_state (rxvt_term *term, const char *dir, char **plugins)
 
   lua_pop (L, 1);
 
-  // plugins can keep helper modules in plugins/lib, which is not autoloaded
+  // Configuration modules and plugin helpers are never autoloaded.
   lua_getglobal (L, "package");
-  lua_pushfstring (L, "%s/lib/?.lua;", dir);
+  lua_pushfstring (L, "%s/lua/?.lua;%s/lua/?/init.lua;%s/lib/?.lua;", config, config, dir);
   lua_getfield (L, -2, "path");
   lua_concat (L, 2);
   lua_setfield (L, -2, "path");
@@ -2373,8 +2511,20 @@ create_state (rxvt_term *term, const char *dir, char **plugins)
   // the terminal is not usable before its lua object exists, which needs
   // the state, but keysym parsing in nrxvt.bind already works
   cur_term = term;
+  config_loading = true;
 
-  for (char **name = plugins; *name; name++)
+  if (init)
+    {
+      if (luaL_loadfile (L, init))
+        rxvt_fatal ("lua: %s\n", lua_tostring (L, -1));
+      if (!pcall (L, 0, 1, init))
+        rxvt_fatal ("lua: init.lua failed, aborting.\n");
+      if (lua_istable (L, -1))
+        register_hooks (L, "init.lua");
+      lua_pop (L, 1);
+    }
+
+  for (char **name = plugins; name && *name; name++)
     {
       char path[PATH_MAX];
       snprintf (path, sizeof (path), "%s/%s", dir, *name);
@@ -2397,6 +2547,7 @@ create_state (rxvt_term *term, const char *dir, char **plugins)
       lua_pop (L, 1);
     }
 
+  config_loading = false;
   cur_term = 0;
 
   // the interpreter needs these to manage the terminal objects and the
@@ -2415,28 +2566,35 @@ create_state (rxvt_term *term, const char *dir, char **plugins)
 bool
 rxvt_lua_interp::init (rxvt_term *term)
 {
-  // the plugins are loaded once, by the first terminal (that finds any)
+  // Load the configuration and plugins once; retain defaults for later
+  // terminals without registering their hooks or key bindings twice.
   if (!L)
     {
-      char dir[PATH_MAX];
+      char config[PATH_MAX], dir[PATH_MAX], init[PATH_MAX];
 
-      if (!plugin_dir (dir, sizeof (dir)))
+      if (!config_dir (config, sizeof (config))
+          || snprintf (dir, sizeof (dir), "%s/plugins", config) >= (int)sizeof (dir)
+          || snprintf (init, sizeof (init), "%s/init.lua", config) >= (int)sizeof (init))
         return false;
 
       char **plugins = find_plugins (dir);
+      bool has_init = access (init, F_OK) == 0 || errno != ENOENT;
 
-      if (!plugins)
+      if (!plugins && !has_init)
         return false;
 
-      create_state (term, dir, plugins);
+      create_state (term, config, dir, has_init ? init : 0, plugins);
 
-      for (char **name = plugins; *name; name++)
+      for (char **name = plugins; name && *name; name++)
         free (*name);
       free (plugins);
 
       if (!L)
         return false;
     }
+
+  apply_config (L, term, config_options_ref);
+  apply_config (L, term, config_resources_ref);
 
   // the terminal object, a table so plugins can store per-terminal state
   // in it, with the terminal pointer at index 0

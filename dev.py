@@ -392,7 +392,7 @@ def cmd_build(args):
         config = os.environ.get("XDG_CONFIG_HOME", "")
         if not os.path.isabs(config):
             config = os.path.expanduser("~/.config")
-        destination = os.path.join(config, "urxvt", "plugins")
+        destination = os.path.join(config, "nrxvt", "plugins")
         os.makedirs(destination, exist_ok=True)
         source = os.path.join(ROOT, "src", "lua")
         for name in sorted(os.listdir(source)):
@@ -480,8 +480,8 @@ def main(argv=None):
     p.add_argument(
         "--copy-lua-scripts-to-home",
         action="store_true",
-        help="copy bundled Lua scripts to $XDG_CONFIG_HOME/urxvt/plugins "
-        "(default: ~/.config/urxvt/plugins), overwriting matching files",
+        help="copy bundled Lua scripts to $XDG_CONFIG_HOME/nrxvt/plugins "
+        "(default: ~/.config/nrxvt/plugins), overwriting matching files",
     )
     p.set_defaults(func=cmd_build)
 

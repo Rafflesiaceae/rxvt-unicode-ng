@@ -35,7 +35,7 @@
 --   NRxvt.keysym.M-Escape: perl:keyboard-select:activate
 --   NRxvt.keysym.M-s:      perl:keyboard-select:search
 --
--- Copy or link this file into ~/.config/urxvt/plugins to enable it.
+-- Copy or link this file into ~/.config/nrxvt/plugins to enable it.
 
 local ACTIVATE_KEY = "M-Escape"
 -- e.g. "M-s", which search.lua uses as well

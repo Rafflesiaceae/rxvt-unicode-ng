@@ -31,8 +31,8 @@ executable(rxvtname,
 )
 
 # The example plugins are not active by default, they are meant to be
-# copied or linked into ~/.config/urxvt/plugins.
+# copied or linked into ~/.config/nrxvt/plugins.
 if have_lua
   install_data('lua/keyboard-select.lua', 'lua/links.lua', 'lua/search.lua', 'lua/scrollbar.lua',
-    install_dir: get_option('datadir') / 'urxvt' / 'lua')
+    install_dir: get_option('datadir') / 'nrxvt' / 'lua')
 endif
