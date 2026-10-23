@@ -3728,7 +3728,7 @@ rxvt_term::process_xterm_seq (int op, char *str, string_term &st)
 
       case URxvt_version:
         if (query)
-          tt_printf ("\33]%d;rxvt-unicode;%-.20s;%c;%c%s",
+          tt_printf ("\33]%d;neoruxvt;%-.20s;%c;%c%s",
                      op,
                      rs[Rs_name], VERSION[0], VERSION[2],
                      st.v);

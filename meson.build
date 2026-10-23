@@ -1,4 +1,4 @@
-project('rxvt-unicode', 'c', 'cpp',
+project('neourxvt', 'c', 'cpp',
   meson_version: '>= 1.3',
   license: 'GPL-3.0-or-later',
   default_options: [

@@ -326,7 +326,7 @@ rxvt_term::config_resource (const char *name, int &option, int &type)
 }
 #endif
 
-static const char releasestring[] = "rxvt-unicode (" RXVTNAME ") v" VERSION " - released: " DATE "\n";
+static const char releasestring[] = "neourxvt (" RXVTNAME ") v" VERSION " - released: " DATE "\n";
 static const char optionsstring[] = "options: "
 #if ENABLE_PERL
                                     "perl,"

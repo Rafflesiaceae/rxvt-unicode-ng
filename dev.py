@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Development helper for building, testing, running and installing rxvt-unicode.
+# Development helper for building, testing, running and installing.
 #
 # Wraps the meson build (in ./build), so the usual steps are available as
 # subcommands:
@@ -448,7 +448,7 @@ def cmd_clean(args):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(
-        description="Build, test, run and install rxvt-unicode for development"
+        description="Build, test, run and install for development"
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
