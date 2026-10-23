@@ -28,7 +28,7 @@
 
 #include <lua.hpp>
 
-// nrxvt.regex works on UTF-8 strings, the 8 bit library
+// nrxvt.api.regex works on UTF-8 strings, the 8 bit library
 #define PCRE2_CODE_UNIT_WIDTH 8
 #include <pcre2.h>
 
@@ -47,20 +47,18 @@ static int hook_refs[HOOK_NUM]; // array of handler functions per hook, 0 if non
 // Startup-only counts allow failed files to roll back their registrations
 // without adding bookkeeping to hook dispatch.
 static int hook_counts[HOOK_NUM];
-static int term_mt_ref;         // metatable of terminal objects
 static int traceback_ref;       // debug.traceback
 
 // the terminal the current hook/plugin code runs for, needed by functions
-// that are not methods (nrxvt.bind needs a terminal to parse keysyms)
+// parsing keysyms for nrxvt.api.bind and managing terminal-scoped objects
 static rxvt_term *cur_term;
 
 // Configuration is evaluated once; its defaults are applied independently
 // to each terminal before resource-dependent initialization begins.
 static int config_options_ref;
-static int config_resources_ref;
 static bool config_loading;
 
-// key bindings registered with nrxvt.bind
+// key bindings registered with nrxvt.api.bind
 struct lua_binding
 {
   KeySym sym;
@@ -69,7 +67,7 @@ struct lua_binding
 };
 static vector<lua_binding> bindings;
 
-// overlay boxes created with t:new_overlay, like the overlay objects of
+// overlay boxes created with nrxvt.api.new_overlay, like the overlay objects of
 // perl. The shown ones are swapped into the screen around every refresh.
 struct lua_overlay
 {
@@ -92,7 +90,7 @@ struct lua_overlay
 // all open overlays, the shown ones are drawn in this order
 static vector<lua_overlay *> overlays;
 
-// cells changed by t:highlight, restored after the refresh
+// cells changed by nrxvt.api.highlight, restored after the refresh
 struct saved_rend
 {
   int row, col;
@@ -225,7 +223,7 @@ push_xevent (lua_State *L, rxvt_term *term, XEvent *xe)
           setint ("y", xe->xmotion.y);
           setint ("x_root", xe->xmotion.x_root);
           setint ("y_root", xe->xmotion.y_root);
-          // absolute row (negative rows are in the scrollback), like t:line
+          // absolute row (negative rows are in the scrollback), like nrxvt.api.line
           setint ("row", xe->xmotion.y / term->fheight + term->view_start);
           setint ("col", xe->xmotion.x / term->fwidth);
           setnum ("state", state);
@@ -407,9 +405,9 @@ apply_rend (rxvt_term *term, line_t &l, int c0, int c1, rend_t and_mask, rend_t 
 }
 
 /////////////////////////////////////////////////////////////////////////////
-// terminal methods
+// terminal API functions
 
-// t:nrow () -> rows of the screen
+// nrxvt.api.nrow (t) -> rows of the screen
 static int
 t_nrow (lua_State *L)
 {
@@ -417,7 +415,7 @@ t_nrow (lua_State *L)
   return 1;
 }
 
-// t:ncol () -> columns of the screen
+// nrxvt.api.ncol (t) -> columns of the screen
 static int
 t_ncol (lua_State *L)
 {
@@ -425,7 +423,7 @@ t_ncol (lua_State *L)
   return 1;
 }
 
-// t:top_row () -> row number of the oldest scrollback line (<= 0)
+// nrxvt.api.top_row (t) -> row number of the oldest scrollback line (<= 0)
 static int
 t_top_row (lua_State *L)
 {
@@ -433,7 +431,7 @@ t_top_row (lua_State *L)
   return 1;
 }
 
-// t:view_start ([row]) -> row shown at the top of the window (<= 0),
+// nrxvt.api.view_start (t [, row]) -> row shown at the top of the window (<= 0),
 // scrolls the view first if row is given
 static int
 t_view_start (lua_State *L)
@@ -447,7 +445,7 @@ t_view_start (lua_State *L)
   return 1;
 }
 
-// t:current_screen () -> 0 for the primary screen, 1 for the alternate.
+// nrxvt.api.current_screen (t) -> 0 for the primary screen, 1 for the alternate.
 // Read the parser's state directly; no PTY queries or output heuristics.
 static int
 t_current_screen (lua_State *L)
@@ -456,7 +454,7 @@ t_current_screen (lua_State *L)
   return 1;
 }
 
-// t:prompt_marker (row [, marked]) -> whether this row is marked.
+// nrxvt.api.prompt_marker (t, row [, marked]) -> whether this row is marked.
 // Explicit marking lets plugins support prompts the heuristic cannot see.
 static int
 t_prompt_marker (lua_State *L)
@@ -477,7 +475,7 @@ t_prompt_marker (lua_State *L)
   return 1;
 }
 
-// t:prompt_markers () -> marked rows in order, oldest first.
+// nrxvt.api.prompt_markers (t) -> marked rows in order, oldest first.
 static int
 t_prompt_markers (lua_State *L)
 {
@@ -498,7 +496,7 @@ t_prompt_markers (lua_State *L)
   return 1;
 }
 
-// t:prompt_jump (direction) -> view_start after navigating.
+// nrxvt.api.prompt_jump (t, direction) -> view_start after navigating.
 static int
 t_prompt_jump (lua_State *L)
 {
@@ -508,10 +506,10 @@ t_prompt_jump (lua_State *L)
   return 1;
 }
 
-// t:cursor ([row, col]) -> row, col
+// nrxvt.api.cursor (t [, row, col]) -> row, col
 // The cursor position, the cursor is moved first if row and col are given.
 // Like perl's screen_cur, rows in the scrollback are allowed, program output
-// would go there as well, so pause the pty (t:pty_events) while it is there.
+// would go there as well, so pause the pty (nrxvt.api.pty_events) while it is there.
 static int
 t_cursor (lua_State *L)
 {
@@ -537,7 +535,7 @@ t_cursor (lua_State *L)
   return 2;
 }
 
-// t:focus () -> whether the window has the input focus
+// nrxvt.api.focus (t) -> whether the window has the input focus
 static int
 t_focus (lua_State *L)
 {
@@ -545,7 +543,7 @@ t_focus (lua_State *L)
   return 1;
 }
 
-// t:font_size () -> width, height of a character cell in pixels
+// nrxvt.api.font_size (t) -> width, height of a character cell in pixels
 static int
 t_font_size (lua_State *L)
 {
@@ -555,7 +553,7 @@ t_font_size (lua_State *L)
   return 2;
 }
 
-// t:window () -> X window id of the toplevel window
+// nrxvt.api.window (t) -> X window id of the toplevel window
 static int
 t_window (lua_State *L)
 {
@@ -630,7 +628,7 @@ t_window_geometry (lua_State *L)
   return 8;
 }
 
-// t:line (row) -> text, wrapped
+// nrxvt.api.line (t, row) -> text, wrapped
 // The UTF-8 text of a row, wrapped tells whether the line continues on the
 // next row. Each column contributes its character, the second column of
 // wide characters contributes nothing.
@@ -655,8 +653,8 @@ t_line (lua_State *L)
   return 2;
 }
 
-// t:col (row, byte) -> column of the character starting at the (1-based)
-// byte offset byte of t:line (row), or the column after the text for
+// nrxvt.api.col (t, row, byte) -> column of the character starting at the (1-based)
+// byte offset byte of nrxvt.api.line (t, row), or the column after the text for
 // offsets beyond it
 static int
 t_col (lua_State *L)
@@ -693,10 +691,10 @@ line_cells (rxvt_term *term, line_t &l)
   return l.is_longer () ? term->ncol : row_len (term, l);
 }
 
-// t:line_bounds (row) -> beg, end, len
+// nrxvt.api.line_bounds (t, row) -> beg, end, len
 // The first and last row of the logical line that row is part of, and its
 // length in cells, like perl's line object. Offsets into the line are
-// (row - beg) * t:ncol () + col.
+// (row - beg) * nrxvt.api.ncol (t) + col.
 static int
 t_line_bounds (lua_State *L)
 {
@@ -718,12 +716,12 @@ t_line_bounds (lua_State *L)
   return 3;
 }
 
-// t:cells (row) -> { cell, ... }
+// nrxvt.api.cells (t, row) -> { cell, ... }
 // The UTF-8 text of every cell of a row, one table entry per column, so
 // that column col is at index col + 1. The second column of wide characters
-// is "". Rows that continue on the next row have t:ncol () cells, the
+// is "". Rows that continue on the next row have nrxvt.api.ncol (t) cells, the
 // others as many as they contain text, so the cells of the rows of a
-// logical line concatenate to t:line_bounds offsets.
+// logical line concatenate to nrxvt.api.line_bounds offsets.
 static int
 t_cells (lua_State *L)
 {
@@ -743,7 +741,7 @@ t_cells (lua_State *L)
   return 1;
 }
 
-// t:rend (row, c0, c1, and_mask, or_mask)
+// nrxvt.api.rend (t, row, c0, c1, and_mask, or_mask)
 // Permanently changes the rendition of the columns [c0, c1) of a row until
 // the line changes again, use it in on_line_update.
 static int
@@ -764,8 +762,8 @@ t_rend (lua_State *L)
   return 0;
 }
 
-// t:highlight (row, c0, c1, and_mask, or_mask)
-// Like t:rend, but only for the refresh in progress, so it is only
+// nrxvt.api.highlight (t, row, c0, c1, and_mask, or_mask)
+// Like nrxvt.api.rend, but only for the refresh in progress, so it is only
 // allowed in on_refresh_begin.
 static int
 t_highlight (lua_State *L)
@@ -778,7 +776,7 @@ t_highlight (lua_State *L)
   rend_t or_mask  = check_rend (L, 6, 0);
 
   if (refresh_term != term)
-    return luaL_error (L, "t:highlight is only allowed in on_refresh_begin");
+    return luaL_error (L, "nrxvt.api.highlight is only allowed in on_refresh_begin");
 
   // silently ignore rows outside of the view, it saves plugins the check
   if (!IN_RANGE_EXC (row - term->view_start, 0, term->nrow)
@@ -824,7 +822,7 @@ xor_cells (rxvt_term *term, int row, int c0, int c1, rend_t mask)
     }
 }
 
-// Reads the r0, c0, r1, c1 arguments of t:xor_span/t:xor_rect, raising an
+// Reads the r0, c0, r1, c1 arguments of nrxvt.api.xor_span/nrxvt.api.xor_rect, raising an
 // error outside of on_refresh_begin. Returns false if no row is visible.
 static bool
 check_xor_args (lua_State *L, rxvt_term *term, int &r0, int &c0, int &r1, int &c1)
@@ -843,10 +841,10 @@ check_xor_args (lua_State *L, rxvt_term *term, int &r0, int &c0, int &r1, int &c
   return r0 < term->view_start + term->nrow && r1 >= term->view_start;
 }
 
-// t:xor_span (r0, c0, r1, c1 [, mask]) - like perl's scr_xor_span, XORs
-// mask (default nrxvt.RS_RVid) into the renditions from (r0, c0) up to,
+// nrxvt.api.xor_span (t, r0, c0, r1, c1 [, mask]) - like perl's scr_xor_span, XORs
+// mask (default nrxvt.api.RS_RVid) into the renditions from (r0, c0) up to,
 // but not including, (r1, c1), rows in between are covered completely.
-// Like t:highlight, it is only allowed in on_refresh_begin and undone
+// Like nrxvt.api.highlight, it is only allowed in on_refresh_begin and undone
 // after the refresh.
 static int
 t_xor_span (lua_State *L)
@@ -872,10 +870,10 @@ t_xor_span (lua_State *L)
   return 0;
 }
 
-// t:xor_rect (r0, c0, r1, c1 [, mask1 [, mask2]]) - like perl's
-// scr_xor_rect, XORs mask1 (default nrxvt.RS_RVid) into the columns
+// nrxvt.api.xor_rect (t, r0, c0, r1, c1 [, mask1 [, mask2]]) - like perl's
+// scr_xor_rect, XORs mask1 (default nrxvt.api.RS_RVid) into the columns
 // [c0, c1) of the rows r0 to r1 (inclusive), and mask2 (default
-// nrxvt.RS_RVid + nrxvt.RS_Uline) into the trailing blanks of each row but
+// nrxvt.api.RS_RVid + nrxvt.api.RS_Uline) into the trailing blanks of each row but
 // the first one, which is how urxvt shows rectangular selections. Only
 // allowed in on_refresh_begin, undone after the refresh.
 static int
@@ -911,7 +909,7 @@ t_xor_rect (lua_State *L)
   return 0;
 }
 
-// t:write (data) - sends data to the program, as if it was typed
+// nrxvt.api.write (t, data) - sends data to the program, as if it was typed
 static int
 t_write (lua_State *L)
 {
@@ -923,7 +921,7 @@ t_write (lua_State *L)
 }
 
 #if defined (KEYSYM_RESOURCE)
-// t:feed (data) - processes data as if the program had output it
+// nrxvt.api.feed (t, data) - processes data as if the program had output it
 static int
 t_feed (lua_State *L)
 {
@@ -935,7 +933,7 @@ t_feed (lua_State *L)
 }
 #endif
 
-// t:refresh () - schedules a redraw, needed after changes made outside of
+// nrxvt.api.refresh (t) - schedules a redraw, needed after changes made outside of
 // hooks (e.g. in timers)
 static int
 t_refresh (lua_State *L)
@@ -946,9 +944,9 @@ t_refresh (lua_State *L)
   return 0;
 }
 
-// t:pty_events ([events]) -> previous events
-// Like perl's pty_ev_events, the I/O events (nrxvt.EV_READ, nrxvt.EV_WRITE)
-// urxvt waits for on the pty, changed to events if given. nrxvt.EV_NONE
+// nrxvt.api.pty_events (t [, events]) -> previous events
+// Like perl's pty_ev_events, the I/O events (nrxvt.api.EV_READ, nrxvt.api.EV_WRITE)
+// urxvt waits for on the pty, changed to events if given. nrxvt.api.EV_NONE
 // pauses the program output until the old events are restored. Writes to
 // the program that can't be sent at once resume it, as urxvt then waits
 // for the pty to become writable (and readable) again.
@@ -965,7 +963,7 @@ t_pty_events (lua_State *L)
   return 1;
 }
 
-// t:overlay (x, y, w, h) - opens the overlay window (there is only one),
+// nrxvt.api.overlay (t, x, y, w, h) - opens the overlay window (there is only one),
 // negative x/y count from the right/bottom, the border adds a cell on each
 // side
 static int
@@ -977,7 +975,7 @@ t_overlay (lua_State *L)
   return 0;
 }
 
-// t:overlay_text (x, y, text [, and_mask, or_mask]) - writes text into the
+// nrxvt.api.overlay_text (t, x, y, text [, and_mask, or_mask]) - writes text into the
 // overlay, the masks apply to the default overlay rendition
 static int
 t_overlay_text (lua_State *L)
@@ -1009,7 +1007,7 @@ t_overlay_text (lua_State *L)
   return 0;
 }
 
-// t:overlay_off () - closes the overlay
+// nrxvt.api.overlay_off (t) - closes the overlay
 static int
 t_overlay_off (lua_State *L)
 {
@@ -1122,7 +1120,7 @@ check_overlay (lua_State *L)
   return ov;
 }
 
-// t:new_overlay (x, y, w, h [, border [, and_mask, or_mask]]) -> overlay
+// nrxvt.api.new_overlay (t, x, y, w, h [, border [, and_mask, or_mask]]) -> overlay
 // Creates a hidden overlay box of w x h cells at column x and row y of the
 // window, negative values count from the right/bottom. There is a border
 // around it (taking another cell on each side) unless border is false.
@@ -1302,7 +1300,7 @@ static const luaL_Reg overlay_methods[] = {
   { 0, 0 }
 };
 
-// t:selection ([clipboard]) -> the selected (or clipboard) text, or nil
+// nrxvt.api.selection (t [, clipboard]) -> the selected (or clipboard) text, or nil
 static int
 t_selection (lua_State *L)
 {
@@ -1319,7 +1317,7 @@ t_selection (lua_State *L)
   return 1;
 }
 
-// t:set_selection (text [, clipboard]) -> whether the selection could be
+// nrxvt.api.set_selection (t, text [, clipboard]) -> whether the selection could be
 // claimed, makes text the PRIMARY (or CLIPBOARD) selection
 static int
 t_set_selection (lua_State *L)
@@ -1345,9 +1343,9 @@ check_time (lua_State *L, int idx)
   return lua_isnoneornil (L, idx) ? CurrentTime : (Time)luaL_checknumber (L, idx);
 }
 
-// Implements t:selection_beg/end/mark ([row, col]) -> row, col, which get
+// Implements nrxvt.api.selection_beg/end/mark ([row, col]) -> row, col, which get
 // or set the corners and the mark of the selection like perl's methods of
-// the same names (followed by t:selection_make to select the text).
+// the same names (followed by nrxvt.api.selection_make to select the text).
 static int
 selection_point (lua_State *L, int which)
 {
@@ -1395,8 +1393,8 @@ static int t_selection_beg  (lua_State *L) { return selection_point (L, 0); }
 static int t_selection_end  (lua_State *L) { return selection_point (L, 1); }
 static int t_selection_mark (lua_State *L) { return selection_point (L, 2); }
 
-// t:selection_make ([rect [, time]]) - selects the text between
-// t:selection_beg and t:selection_end (a rectangle if rect is true) like a
+// nrxvt.api.selection_make (t [, rect [, time]]) - selects the text between
+// nrxvt.api.selection_beg and nrxvt.api.selection_end (t, a rectangle if rect is true) like a
 // selection made with the mouse, and claims the PRIMARY selection
 static int
 t_selection_make (lua_State *L)
@@ -1409,7 +1407,7 @@ t_selection_make (lua_State *L)
   return 0;
 }
 
-// t:selection_grab ([clipboard [, time]]) -> whether the PRIMARY (or
+// nrxvt.api.selection_grab (t [, clipboard [, time]]) -> whether the PRIMARY (or
 // CLIPBOARD) selection could be claimed with the current text
 static int
 t_selection_grab (lua_State *L)
@@ -1419,7 +1417,7 @@ t_selection_grab (lua_State *L)
   return 1;
 }
 
-// t:selection_clear ([clipboard]) - forgets the PRIMARY text and removes
+// nrxvt.api.selection_clear (t [, clipboard]) - forgets the PRIMARY text and removes
 // the highlight of the selection (or forgets the CLIPBOARD text)
 static int
 t_selection_clear (lua_State *L)
@@ -1428,7 +1426,7 @@ t_selection_clear (lua_State *L)
   return 0;
 }
 
-// t:selection_request ([clipboard [, time]]) - pastes the PRIMARY (or
+// nrxvt.api.selection_request (t [, clipboard [, time]]) - pastes the PRIMARY (or
 // CLIPBOARD) selection into the program, like a middle click (Shift-Insert)
 static int
 t_selection_request (lua_State *L)
@@ -1438,7 +1436,7 @@ t_selection_request (lua_State *L)
   return 0;
 }
 
-// selection requests of t:selection_fetch, which hand the text to a lua
+// selection requests of nrxvt.api.selection_fetch, which hand the text to a lua
 // function instead of pasting it, the cb_sv of the rxvt_selection
 struct lua_fetch
 {
@@ -1466,8 +1464,8 @@ fetch_free (lua_State *L, lua_fetch *f)
   delete f;
 }
 
-// t:selection_fetch (clipboard, fn [, time]) -> whether it was requested
-// Requests the PRIMARY (or CLIPBOARD) selection like t:selection_request,
+// nrxvt.api.selection_fetch (t, clipboard, fn [, time]) -> whether it was requested
+// Requests the PRIMARY (or CLIPBOARD) selection like nrxvt.api.selection_request,
 // but calls fn (text) with it instead of pasting it into the program, or
 // fn (nil) if there is none. Only one fetch per terminal can be pending,
 // false is returned while there is one.
@@ -1506,7 +1504,7 @@ t_selection_fetch (lua_State *L)
   return 1;
 }
 
-// called by rxvt_selection::finish for the requests of t:selection_fetch,
+// called by rxvt_selection::finish for the requests of nrxvt.api.selection_fetch,
 // data is in the locale encoding or 0 if there is no selection
 void
 rxvt_lua_interp::selection_finish (rxvt_selection *sel, char *data, unsigned int len)
@@ -1538,7 +1536,7 @@ rxvt_lua_interp::selection_finish (rxvt_selection *sel, char *data, unsigned int
   lua_settop (L, base);
 }
 
-// t:resource (name) -> value of the X resource for the configured name/class, or nil
+// nrxvt.api.resource (t, name) -> value of the X resource for the configured name/class, or nil
 static int
 t_resource (lua_State *L)
 {
@@ -1547,7 +1545,7 @@ t_resource (lua_State *L)
   return 1;
 }
 
-// t:resource_boolean (name) -> true or false, nil if the resource is not
+// nrxvt.api.resource_boolean (t, name) -> true or false, nil if the resource is not
 // set. Like perl's x_resource_boolean, "true", "yes", "on" and "1" (in any
 // case, surrounding blanks are ignored) are true, anything else is false.
 static int
@@ -1579,7 +1577,7 @@ t_resource_boolean (lua_State *L)
   return 1;
 }
 
-static const luaL_Reg term_methods[] = {
+static const luaL_Reg terminal_functions[] = {
   { "new_bar",       rxvt_bar_new    },
   { "nrow",          t_nrow          },
   { "ncol",          t_ncol          },
@@ -1628,9 +1626,9 @@ static const luaL_Reg term_methods[] = {
 };
 
 /////////////////////////////////////////////////////////////////////////////
-// nrxvt global
+// runtime API
 
-// Each nrxvt.on_* closure captures its hook ID once. Store callbacks directly
+// Each nrxvt.api.on_* closure captures its hook ID once. Store callbacks directly
 // in the dispatcher's arrays; only loading and rollback use hook_counts.
 static int
 u_on (lua_State *L)
@@ -1653,7 +1651,7 @@ u_on (lua_State *L)
   return 0;
 }
 
-// nrxvt.bind (keyspec, fn) - calls fn (t) when keyspec (keysym resource
+// nrxvt.api.bind (keyspec, fn) - calls fn (t) when keyspec (keysym resource
 // syntax, e.g. "M-s" or "C-S-Up") is pressed. The key is consumed unless fn
 // returns false. Like keysym resources, extra modifiers are ignored.
 static int
@@ -1663,7 +1661,7 @@ u_bind (lua_State *L)
   luaL_checktype (L, 2, LUA_TFUNCTION);
 
   if (!cur_term)
-    return luaL_error (L, "nrxvt.bind needs to be called from plugin or hook code");
+    return luaL_error (L, "nrxvt.api.bind needs to be called from plugin or hook code");
 
   lua_binding b;
   int sym = cur_term->parse_keysym (spec, b.state);
@@ -1680,7 +1678,7 @@ u_bind (lua_State *L)
   return 0;
 }
 
-// nrxvt.style {fg=, bg=, bold=, italic=, underline=, reverse=, blink=}
+// nrxvt.api.style {fg=, bg=, bold=, italic=, underline=, reverse=, blink=}
 //   -> and_mask, or_mask
 // fg/bg are color indices (0-15 for the basic colors) or "default", the
 // attributes are set (true) or cleared (false), omitted ones stay as they are.
@@ -1747,7 +1745,7 @@ u_style (lua_State *L)
   return 2;
 }
 
-// nrxvt.spawn (argv) - starts a detached program, argv is a table of
+// nrxvt.api.spawn (argv) - starts a detached program, argv is a table of
 // arguments or a string for /bin/sh -c. Returns whether fork succeeded.
 static int
 u_spawn (lua_State *L)
@@ -1764,7 +1762,7 @@ u_spawn (lua_State *L)
       int n = lua_objlen (L, 1);
 
       if (n < 1)
-        return luaL_error (L, "nrxvt.spawn needs a program to run");
+        return luaL_error (L, "nrxvt.api.spawn needs a program to run");
 
       // lives on the lua stack, so it is freed even if an argument is bad
       argv = (const char **)lua_newuserdata (L, (n + 1) * sizeof (char *));
@@ -1812,7 +1810,7 @@ u_spawn (lua_State *L)
   return 1;
 }
 
-// timers created by nrxvt.timer
+// timers created by nrxvt.api.timer
 struct lua_timer
 {
   ev::timer w;
@@ -1916,7 +1914,7 @@ timer_gc (lua_State *L)
   return 0;
 }
 
-// nrxvt.timer (after, fn [, repeat]) -> timer
+// nrxvt.api.timer (after, fn [, repeat]) -> timer
 // Calls fn after `after` seconds and then every `repeat` seconds, if given.
 // Active timers stay alive without references, stop them with timer:stop.
 // They don't keep urxvt running once all terminals are closed.
@@ -1945,7 +1943,7 @@ u_timer (lua_State *L)
   return 1;
 }
 
-// nrxvt.warn (msg) - prints a message on stderr
+// nrxvt.api.warn (msg) - prints a message on stderr
 static int
 u_warn (lua_State *L)
 {
@@ -1953,7 +1951,7 @@ u_warn (lua_State *L)
   return 0;
 }
 
-// nrxvt.keysym_name (keysym) -> name of a keysym, e.g. "Return", or nil
+// nrxvt.api.keysym_name (keysym) -> name of a keysym, e.g. "Return", or nil
 static int
 u_keysym_name (lua_State *L)
 {
@@ -1964,7 +1962,7 @@ u_keysym_name (lua_State *L)
 /////////////////////////////////////////////////////////////////////////////
 // regular expressions (PCRE2), the replacement for the perl regexes
 
-// a compiled pattern, the userdata of nrxvt.regex objects
+// a compiled pattern, the userdata of nrxvt.api.regex objects
 struct lua_regex
 {
   pcre2_code *code;
@@ -1991,7 +1989,7 @@ regex_gc (lua_State *L)
   return 0;
 }
 
-// nrxvt.regex (pattern [, flags]) -> regex
+// nrxvt.api.regex (pattern [, flags]) -> regex
 // Compiles a perl compatible regular expression, raising an error if it is
 // invalid. flags is a string of perl modifiers: i (caseless), m (multiline),
 // s (dot matches newlines) and x (extended). Patterns and subjects are
@@ -2211,7 +2209,7 @@ static const luaL_Reg regex_methods[] = {
   { 0, 0 }
 };
 
-// nrxvt.regex_escape (s) -> s with every ASCII character besides letters,
+// nrxvt.api.regex_escape (s) -> s with every ASCII character besides letters,
 // digits and "_" escaped, so it matches literally, like perl's quotemeta
 static int
 u_regex_escape (lua_State *L)
@@ -2242,7 +2240,7 @@ u_regex_escape (lua_State *L)
   return 1;
 }
 
-static const luaL_Reg urxvt_functions[] = {
+static const luaL_Reg api_functions[] = {
   { "bind",        u_bind        },
   { "regex",       u_regex       },
   { "regex_escape", u_regex_escape },
@@ -2262,12 +2260,9 @@ static int
 config_index (lua_State *L)
 {
   const char *name = luaL_checkstring (L, 2);
-  if (lua_toboolean (L, lua_upvalueindex (2)))
-    {
-      int option, type;
-      if (rxvt_term::config_resource (name, option, type) < 0)
-        return luaL_error (L, "unknown or unavailable option '%s'", name);
-    }
+  int option, type;
+  if (rxvt_term::config_resource (name, option, type) < 0)
+    return luaL_error (L, "unknown or unavailable option '%s'", name);
 
   lua_pushvalue (L, 2);
   lua_rawget (L, lua_upvalueindex (1));
@@ -2290,18 +2285,14 @@ config_newindex (lua_State *L)
 
   int option, type;
   int resource = rxvt_term::config_resource (name, option, type);
-  bool core = lua_toboolean (L, lua_upvalueindex (2));
-  if (core && resource < 0)
+  if (resource < 0)
     return luaL_error (L, "unknown or unavailable option '%s'", name);
-  if (!core && resource >= 0)
-    return luaL_error (L, "use nrxvt.opt for built-in option '%s'", name);
 
   if (!lua_isnil (L, 3))
     {
       int value_type = lua_type (L, 3);
       int expected = type == 2 ? LUA_TBOOLEAN : type == 3 ? LUA_TNUMBER : LUA_TSTRING;
-      if (core ? value_type != expected
-               : value_type != LUA_TSTRING && value_type != LUA_TNUMBER && value_type != LUA_TBOOLEAN)
+      if (value_type != expected)
         return luaL_error (L, "invalid value type for '%s'", name);
       if (value_type == LUA_TNUMBER && !isfinite (lua_tonumber (L, 3)))
         return luaL_error (L, "'%s' requires a finite number", name);
@@ -2322,24 +2313,22 @@ config_newindex (lua_State *L)
 
 // Keep the backing tables private so all normal assignments are validated.
 static void
-register_config (lua_State *L, const char *name, int &ref, bool core)
+register_config (lua_State *L)
 {
   lua_newtable (L);
-  ref = luaL_ref (L, LUA_REGISTRYINDEX);
+  config_options_ref = luaL_ref (L, LUA_REGISTRYINDEX);
   lua_newtable (L);
   lua_newtable (L);
-  lua_rawgeti (L, LUA_REGISTRYINDEX, ref);
-  lua_pushboolean (L, core);
-  lua_pushcclosure (L, config_index, 2);
+  lua_rawgeti (L, LUA_REGISTRYINDEX, config_options_ref);
+  lua_pushcclosure (L, config_index, 1);
   lua_setfield (L, -2, "__index");
-  lua_rawgeti (L, LUA_REGISTRYINDEX, ref);
-  lua_pushboolean (L, core);
-  lua_pushcclosure (L, config_newindex, 2);
+  lua_rawgeti (L, LUA_REGISTRYINDEX, config_options_ref);
+  lua_pushcclosure (L, config_newindex, 1);
   lua_setfield (L, -2, "__newindex");
   lua_pushliteral (L, "configuration");
   lua_setfield (L, -2, "__metatable");
   lua_setmetatable (L, -2);
-  lua_setfield (L, -2, name);
+  lua_setfield (L, -2, "opt");
 }
 
 // Apply defaults before Xresources are extracted. Existing resource slots
@@ -2472,7 +2461,7 @@ load_hooks (lua_State *L, const char *path, const char *name)
     {
       if (!lua_isnil (L, -1))
         {
-          rxvt_warn ("lua: %s: register hooks with nrxvt.on_* instead of returning a value.\n", name);
+          rxvt_warn ("lua: %s: register hooks with nrxvt.api.on_* instead of returning a value.\n", name);
           ok = false;
         }
 
@@ -2532,15 +2521,6 @@ create_state (rxvt_term *term, const char *config, const char *dir, const char *
   traceback_ref = luaL_ref (L, LUA_REGISTRYINDEX);
   lua_pop (L, 1);
 
-  // the terminal object metatable, methods are looked up in it
-  lua_createtable (L, 0, 2);
-  lua_newtable (L);
-  luaL_register (L, 0, term_methods);
-  lua_setfield (L, -2, "__index");
-  lua_pushliteral (L, "nrxvt.terminal");
-  lua_setfield (L, -2, "__name");
-  term_mt_ref = luaL_ref (L, LUA_REGISTRYINDEX);
-
   luaL_newmetatable (L, "nrxvt.timer");
   lua_newtable (L);
   lua_pushcfunction (L, timer_start);
@@ -2568,25 +2548,24 @@ create_state (rxvt_term *term, const char *config, const char *dir, const char *
   lua_setfield (L, -2, "__gc");
   lua_pop (L, 1);
 
-  // Expose only the implicit global; plugins do not need a module import.
+  // Keep startup settings separate from the runtime API namespace.
   lua_newtable (L);
-  luaL_register (L, 0, urxvt_functions);
+  register_config (L);
+  lua_newtable (L);
+  luaL_register (L, 0, api_functions);
+  luaL_register (L, 0, terminal_functions);
   for (int htype = 0; htype < HOOK_NUM; htype++)
     {
       lua_pushinteger (L, htype);
       lua_pushcclosure (L, u_on, 1);
       lua_setfield (L, -2, hook_names[htype]);
     }
-  lua_pushvalue (L, -1);
-  lua_setglobal (L, "nrxvt");
-  register_config (L, "opt", config_options_ref, true);
-  register_config (L, "resources", config_resources_ref, false);
   lua_pushstring (L, VERSION);
   lua_setfield (L, -2, "version");
   lua_pushstring (L, dir);
   lua_setfield (L, -2, "plugin_dir");
 
-  // constants of the perl interface, for t:pty_events and t:xor_span/rect
+  // Event and rendition masks used by the terminal API functions.
   static const struct { const char *name; lua_Number value; } constants[] = {
     { "EV_NONE",   ev::NONE  },
     { "EV_READ",   ev::READ  },
@@ -2605,7 +2584,8 @@ create_state (rxvt_term *term, const char *config, const char *dir, const char *
       lua_setfield (L, -2, constants[i].name);
     }
 
-  lua_pop (L, 1);
+  lua_setfield (L, -2, "api");
+  lua_setglobal (L, "nrxvt");
 
   // Configuration modules and plugin helpers are never autoloaded.
   lua_getglobal (L, "package");
@@ -2618,7 +2598,7 @@ create_state (rxvt_term *term, const char *config, const char *dir, const char *
   rxvt_lua.L = L;
 
   // the terminal is not usable before its lua object exists, which needs
-  // the state, but keysym parsing in nrxvt.bind already works
+  // the state, but keysym parsing in nrxvt.api.bind already works
   cur_term = term;
   config_loading = true;
 
@@ -2680,15 +2660,12 @@ rxvt_lua_interp::init (rxvt_term *term)
     }
 
   apply_config (L, term, config_options_ref);
-  apply_config (L, term, config_resources_ref);
 
   // the terminal object, a table so plugins can store per-terminal state
   // in it, with the terminal pointer at index 0
   lua_createtable (L, 0, 1);
   lua_pushlightuserdata (L, term);
   lua_rawseti (L, -2, 0);
-  lua_rawgeti (L, LUA_REGISTRYINDEX, term_mt_ref);
-  lua_setmetatable (L, -2);
   term->lua.ref = luaL_ref (L, LUA_REGISTRYINDEX);
 
   return true;
@@ -2697,7 +2674,7 @@ rxvt_lua_interp::init (rxvt_term *term)
 /////////////////////////////////////////////////////////////////////////////
 // hook invocation
 
-// Calls the nrxvt.bind function matching a key press, if any. Returns
+// Calls the nrxvt.api.bind function matching a key press, if any. Returns
 // whether the key was consumed.
 static bool
 invoke_binding (lua_State *L, rxvt_term *term, XEvent *xe, KeySym sym)

@@ -12,22 +12,24 @@
 --
 -- Copy or link this file into ~/.config/nrxvt/plugins to enable it.
 
+local api = nrxvt.api
+
 local SEARCH_KEY = "M-s"
 
-local MATCH = { nrxvt.style { reverse = true } }
-local CURRENT = { nrxvt.style { fg = 0, bg = 11, reverse = false } }
+local MATCH = { api.style { reverse = true } }
+local CURRENT = { api.style { fg = 0, bg = 11, reverse = false } }
 
 -- the prompt overlay covers the last three rows (one plus its border)
 local PROMPT_ROWS = 3
 
-local UPPER = nrxvt.regex ("[[:upper:]]")
+local UPPER = api.regex ("[[:upper:]]")
 
 -- Sets the query, search.needle is the literal regex that is actually
 -- searched for: smart case, i.e. case-insensitive unless the query
 -- contains upper case letters.
 local function set_query (search, query)
   search.query = query
-  search.needle = query ~= "" and nrxvt.regex (nrxvt.regex_escape (query), UPPER:find (query) and "" or "i") or nil
+  search.needle = query ~= "" and api.regex (api.regex_escape (query), UPPER:find (query) and "" or "i") or nil
 end
 
 -- number of characters of an UTF-8 string
@@ -37,7 +39,7 @@ end
 
 -- the last match in row starting before byte `before` (exclusive), or nil
 local function last_in_row (t, search, row, before)
-  local text = t:line (row)
+  local text = api.line (t, row)
   local query = search.needle
   local found
   local pos = 1
@@ -54,7 +56,7 @@ end
 
 -- searches older rows, starting with the match before (row, byte)
 local function find_older (t, search, row, byte)
-  for r = row, t:top_row (), -1 do
+  for r = row, api.top_row (t), -1 do
     local s = last_in_row (t, search, r, r == row and byte or math.huge)
     if s then return r, s end
   end
@@ -62,8 +64,8 @@ end
 
 -- searches newer rows, starting with the match after (row, byte)
 local function find_newer (t, search, row, byte)
-  for r = row, t:nrow () - 1 do
-    local s = search.needle:find ((t:line (r)), r == row and byte + 1 or 1)
+  for r = row, api.nrow (t) - 1 do
+    local s = search.needle:find ((api.line (t, r)), r == row and byte + 1 or 1)
     if s then return r, s end
   end
 end
@@ -74,7 +76,7 @@ local function draw_prompt (t, search)
     status = "[no match]"
   end
 
-  local width = t:ncol () - 2
+  local width = api.ncol (t) - 2
   local text = "search: " .. search.query
   local pad = width - length (text) - #status
   if pad < 1 then
@@ -83,18 +85,18 @@ local function draw_prompt (t, search)
     pad = 1
   end
 
-  t:overlay_text (0, 0, text .. string.rep (" ", pad) .. status)
+  api.overlay_text (t, 0, 0, text .. string.rep (" ", pad) .. status)
 end
 
 -- scrolls so the current match is visible, if it is not already
 local function show_match (t, search)
   if not search.row then return end
 
-  local view = t:view_start ()
-  local nrow = t:nrow ()
+  local view = api.view_start (t)
+  local nrow = api.nrow (t)
 
   if search.row < view or search.row >= view + nrow - PROMPT_ROWS then
-    t:view_start (search.row - math.floor (nrow / 2))
+    api.view_start (t, search.row - math.floor (nrow / 2))
   end
 end
 
@@ -102,7 +104,7 @@ local function update (t, search, row, s)
   search.row, search.byte = row, s
   show_match (t, search)
   draw_prompt (t, search)
-  t:refresh ()
+  api.refresh (t)
 end
 
 -- searches for the query from scratch, or from the current match when it
@@ -117,17 +119,17 @@ local function research (t, search)
     row, s = find_older (t, search, search.row, search.byte + 1)
   end
   if not row then
-    row, s = find_older (t, search, t:nrow () - 1, math.huge)
+    row, s = find_older (t, search, api.nrow (t) - 1, math.huge)
   end
 
   update (t, search, row, s)
 end
 
 local function stop (t, search, restore)
-  if restore then t:view_start (search.view) end
-  t:overlay_off ()
+  if restore then api.view_start (t, search.view) end
+  api.overlay_off (t)
   t.search = nil
-  t:refresh ()
+  api.refresh (t)
 end
 
 -- moves to the previous or next match
@@ -145,25 +147,25 @@ local function step (t, search, older)
   if row then update (t, search, row, s) end
 end
 
-nrxvt.bind (SEARCH_KEY, function (t)
+api.bind (SEARCH_KEY, function (t)
   local search = t.search
   if search then
     return step (t, search, true)
   end
 
-  search = { view = t:view_start () }
+  search = { view = api.view_start (t) }
   set_query (search, "")
   t.search = search
-  t:overlay (0, -1, t:ncol () - 2, 1)
+  api.overlay (t, 0, -1, api.ncol (t) - 2, 1)
   draw_prompt (t, search)
-  t:refresh ()
+  api.refresh (t)
 end)
 
-nrxvt.on_key_press (function (t, ev, keysym, str)
+api.on_key_press (function (t, ev, keysym, str)
   local search = t.search
   if not search then return end
 
-  local key = nrxvt.keysym_name (keysym)
+  local key = api.keysym_name (keysym)
 
   if key == "Escape" or (ev.ctrl and key == "g") then
     stop (t, search, true)
@@ -187,26 +189,26 @@ nrxvt.on_key_press (function (t, ev, keysym, str)
 end)
 
 -- highlights the matches on screen
-nrxvt.on_refresh_begin (function (t)
+api.on_refresh_begin (function (t)
   local search = t.search
   if not search or search.query == "" then return end
 
   local query = search.needle
-  local view = t:view_start ()
+  local view = api.view_start (t)
 
-  for row = view, view + t:nrow () - 1 - PROMPT_ROWS do
-    for s, e in query:gfind ((t:line (row))) do
+  for row = view, view + api.nrow (t) - 1 - PROMPT_ROWS do
+    for s, e in query:gfind ((api.line (t, row))) do
       local style = (row == search.row and s == search.byte) and CURRENT or MATCH
-      t:highlight (row, t:col (row, s), t:col (row, e + 1), unpack (style))
+      api.highlight (t, row, api.col (t, row, s), api.col (t, row, e + 1), unpack (style))
     end
   end
 end)
 
 -- the screen size changed, the prompt has to be recreated
-nrxvt.on_size_change (function (t)
+api.on_size_change (function (t)
   local search = t.search
   if search then
-    t:overlay (0, -1, t:ncol () - 2, 1)
+    api.overlay (t, 0, -1, api.ncol (t) - 2, 1)
     draw_prompt (t, search)
   end
 end)

@@ -1,4 +1,6 @@
 -- A reserved scrollbar anchored toward the nearest horizontal monitor edge.
+local api = nrxvt.api
+
 local THICKNESS = 4
 local MIN_HANDLE = 20
 local WHEEL_LINES = 3
@@ -13,8 +15,8 @@ local function sync(t)
   local s = t.lua_scrollbar
   if not s then return end
   local _, _, _, length = s.bar:geometry()
-  local history, rows = max(0, -t:top_row()), t:nrow()
-  local shown = t:current_screen() == 0 and history > 0 and length > 0
+  local history, rows = max(0, -api.top_row(t)), api.nrow(t)
+  local shown = api.current_screen(t) == 0 and history > 0 and length > 0
   s.bar:visible(shown)
   if not shown then
     s.grab = nil
@@ -23,7 +25,7 @@ local function sync(t)
 
   local handle = min(length, max(MIN_HANDLE, round(length * rows / (rows + history))))
   local travel = length - handle
-  local start = round(travel * (clamp(t:view_start(), -history, 0) + history) / history)
+  local start = round(travel * (clamp(api.view_start(t), -history, 0) + history) / history)
   s.history, s.rows, s.length, s.handle, s.travel, s.start = history, rows, length, handle, travel, start
   -- Complete trees are cheap here: reuse three stable nodes and submit only
   -- when their final pixel geometry changes, even while history keeps growing.
@@ -46,12 +48,12 @@ local function input(t, bar, ev)
   if not bar:visible() then return end
   if ev.type == "button_press" then
     if ev.button == 4 or ev.button == 5 then
-      t:view_start(t:view_start() + (ev.button == 4 and -WHEEL_LINES or WHEEL_LINES))
+      api.view_start(t, api.view_start(t) + (ev.button == 4 and -WHEEL_LINES or WHEEL_LINES))
     elseif ev.button == 1 then
       if ev.y >= s.start and ev.y < s.start + s.handle then
         if s.travel > 0 and bar:capture(ev) then s.grab = ev.y - s.start end
       else
-        t:view_start(t:view_start() + (ev.y < s.start and -s.rows or s.rows))
+        api.view_start(t, api.view_start(t) + (ev.y < s.start and -s.rows or s.rows))
       end
     end
   elseif ev.type == "motion" and s.grab then
@@ -59,7 +61,7 @@ local function input(t, bar, ev)
       s.grab = min(s.grab, s.handle - 1)
       local position = clamp(ev.y - s.grab, 0, s.travel)
       local row = -s.history + round(s.history * position / s.travel)
-      if row ~= t:view_start() then t:view_start(row) end
+      if row ~= api.view_start(t) then api.view_start(t, row) end
     end
   elseif ev.type == "button_release" and ev.button == 1 then
     s.grab = nil
@@ -68,14 +70,14 @@ local function input(t, bar, ev)
 end
 
 local function new_bar(t, edge)
-  return t:new_bar { edge = edge, thickness = THICKNESS, priority = PRIORITY,
-                     visible = false, on_event = input }
+  return api.new_bar(t, { edge = edge, thickness = THICKNESS, priority = PRIORITY,
+                     visible = false, on_event = input })
 end
 
 local function anchor(t)
   local s = t.lua_scrollbar
   if not s then return end
-  local x, _, width, _, monitor_x, _, monitor_width = t:window_geometry()
+  local x, _, width, _, monitor_x, _, monitor_width = api.window_geometry(t)
   if not x then return end
   -- Compare decorated frame centers, so i3 borders and monitor offsets do
   -- not bias placement. Centered and full-width windows keep the left bar.
@@ -89,7 +91,7 @@ local function anchor(t)
   sync(t)
 end
 
-nrxvt.on_init (function (t)
+api.on_init (function (t)
   local s = {
     edge = "left",
     tree = { bg = "background", children = {
@@ -104,16 +106,16 @@ end)
 
 -- Placement queries run on window events, never on the output refresh path.
 -- Property changes include i3 updating its frame extents after border changes.
-nrxvt.on_start (anchor)
-nrxvt.on_configure_notify (anchor)
-nrxvt.on_map_notify (anchor)
-nrxvt.on_property_notify (function (t, ev)
-  if ev.window == t:window() then anchor(t) end
+api.on_start (anchor)
+api.on_configure_notify (anchor)
+api.on_map_notify (anchor)
+api.on_property_notify (function (t, ev)
+  if ev.window == api.window(t) then anchor(t) end
 end)
 
 -- One tuple/geometry calculation per refresh covers resets and explicit
 -- scrollback clearing as well as ordinary output, without a polling timer.
-nrxvt.on_start (sync)
-nrxvt.on_refresh_begin (sync)
-nrxvt.on_screen_change (sync)
-nrxvt.on_reset (sync)
+api.on_start (sync)
+api.on_refresh_begin (sync)
+api.on_screen_change (sync)
+api.on_reset (sync)

@@ -37,6 +37,8 @@
 --
 -- Copy or link this file into ~/.config/nrxvt/plugins to enable it.
 
+local api = nrxvt.api
+
 local ACTIVATE_KEY = "M-Escape"
 -- e.g. "M-s", which search.lua uses as well
 local SEARCH_KEY = nil
@@ -44,13 +46,13 @@ local SEARCH_KEY = nil
 -- character classes for the word motions, like \s, \w and the rest in the
 -- regular expressions of the perl version
 local SPACE, WORD, PUNCT = 0, 1, 2
-local SPACE_RE, WORD_RE = nrxvt.regex ("^\\s"), nrxvt.regex ("^\\w")
+local SPACE_RE, WORD_RE = api.regex ("^\\s"), api.regex ("^\\w")
 -- search texts with upper case letters are case-sensitive
-local UPPER_RE = nrxvt.regex ("[[:upper:]]")
+local UPPER_RE = api.regex ("[[:upper:]]")
 
 -- the cursor of the search prompt is drawn reversed, the text isn't
-local PROMPT_TEXT = { nrxvt.style { reverse = false } }
-local PROMPT_CURSOR = { nrxvt.style { reverse = true } }
+local PROMPT_TEXT = { api.style { reverse = false } }
+local PROMPT_CURSOR = { api.style { reverse = true } }
 
 -- the keys of move_cursor, those in SCROLL_KEYS only with Control
 local CURSOR_KEYS = { g = true, G = true, ["0"] = true, ["^"] = true, ["$"] = true, H = true, M = true, L = true }
@@ -72,8 +74,8 @@ Line.__index = Line
 
 -- the logical line that row is part of
 local function line (t, row)
-  local beg, last, len = t:line_bounds (row)
-  return setmetatable ({ t = t, beg = beg, last = last, l = len, ncol = t:ncol () }, Line)
+  local beg, last, len = api.line_bounds (t, row)
+  return setmetatable ({ t = t, beg = beg, last = last, l = len, ncol = api.ncol (t) }, Line)
 end
 
 function Line:offset_of (row, col)
@@ -92,7 +94,7 @@ function Line:cells ()
   if not self.cell_list then
     local cells = {}
     for row = self.beg, self.last do
-      for _, cell in ipairs (self.t:cells (row)) do
+      for _, cell in ipairs (api.cells (self.t, row)) do
         cells[#cells + 1] = cell
       end
     end
@@ -150,14 +152,14 @@ local function status_area (t, ks, extra)
 
   if ks.search ~= "" then
     -- the padding makes room for the cursor at the end of the text
-    stat = ks.search .. string.rep (" ", t:ncol () - length (ks.search))
+    stat = ks.search .. string.rep (" ", api.ncol (t) - length (ks.search))
   else
     stat = ""
     if ks.select ~= "" then
       stat = "-V" .. (ks.select ~= "n" and ks.select:upper () or "") .. "- "
     end
 
-    local top, view = t:top_row (), t:view_start ()
+    local top, view = api.top_row (t), api.view_start (t)
     if top == 0 then
       stat = stat .. "All"
     elseif view == top then
@@ -175,7 +177,7 @@ local function status_area (t, ks, extra)
   local len = length (stat)
   if not ks.overlay or ks.overlay_len ~= len then
     if ks.overlay then ks.overlay:close () end
-    ks.overlay = t:new_overlay (-1, -1, len, 1, false)
+    ks.overlay = api.new_overlay (t, -1, -1, len, 1, false)
     ks.overlay_len = len
   end
 
@@ -192,13 +194,13 @@ end
 -- keeps the cursor in the window, the perl version does this on every
 -- refresh, here the cursor only moves on key presses
 local function show_cursor (t)
-  local row = t:cursor ()
-  local view, nrow = t:view_start (), t:nrow ()
+  local row = api.cursor (t)
+  local view, nrow = api.view_start (t), api.nrow (t)
 
   if row < view then
-    t:view_start (row)
+    api.view_start (t, row)
   elseif row >= view + nrow then
-    t:view_start (row - nrow + 1)
+    api.view_start (t, row - nrow + 1)
   end
 end
 
@@ -207,7 +209,7 @@ end
 -- the selected area, an exclusive end column; in blockwise mode the rows
 -- are the first rows of logical lines and the columns are offsets
 local function calc_span (t, ks)
-  local cr, cc = t:cursor ()
+  local cr, cc = api.cursor (t)
   local br, bc, er, ec
 
   if ks.select == "b" then
@@ -227,7 +229,7 @@ local function calc_span (t, ks)
 
   if ks.select == "l" then
     br, er = line (t, br).beg, line (t, er).last
-    bc, ec = 0, t:ncol ()
+    bc, ec = 0, api.ncol (t)
   else
     ec = ec + 1
   end
@@ -240,7 +242,7 @@ local function toggle_select (t, ks, mode)
     ks.select = ""
   else
     if ks.select == "" then
-      ks.ar, ks.ac = t:cursor ()
+      ks.ar, ks.ac = api.cursor (t)
     end
     ks.select = mode
   end
@@ -250,8 +252,8 @@ end
 
 -- an empty selection, which removes the selection highlight
 local function clear_selection (t)
-  t:selection_beg (1, 0)
-  t:selection_end (1, 0)
+  api.selection_beg (t, 1, 0)
+  api.selection_end (t, 1, 0)
 end
 
 -- copies the selection to PRIMARY (and CLIPBOARD)
@@ -259,22 +261,22 @@ local function copy (t, ks, time)
   local br, bc, er, ec = calc_span (t, ks)
   if ks.select == "l" then ec = line (t, er).l end
 
-  t:selection_beg (br, bc)
-  t:selection_end (er, ec)
-  t:selection_make (ks.select == "b", time)
+  api.selection_beg (t, br, bc)
+  api.selection_end (t, er, ec)
+  api.selection_make (t, ks.select == "b", time)
 
-  local text = t:selection ()
+  local text = api.selection (t)
   if ks.clipboard and text then
-    t:set_selection (text, true)
+    api.set_selection (t, text, true)
   end
 end
 
 -- cursor movement
 
 local function move_cursor (t, ks, key)
-  local cr, cc = t:cursor ()
+  local cr, cc = api.cursor (t)
   local ln = line (t, cr)
-  local top, nrow = t:top_row (), t:nrow ()
+  local top, nrow = api.top_row (t), api.nrow (t)
 
   if key == "k" and ln.beg > top then
     cr = ln.beg - 1
@@ -293,12 +295,12 @@ local function move_cursor (t, ks, key)
     while offset < ln.l - 1 and cells[offset + 1] == "" do offset = offset + 1 end
     ks.offset = offset
   elseif key == "f" or key == "d" or key == "b" or key == "u" then
-    local view = t:view_start ()
+    local view = api.view_start (t)
     local amount = (key == "d" or key == "u") and math.floor (nrow / 2) or nrow - 1
     if key == "b" or key == "u" then amount = -amount end
 
     -- move the cursor as far as the window could be scrolled
-    local new = t:view_start (math.max (top, math.min (0, view + amount)))
+    local new = api.view_start (t, math.max (top, math.min (0, view + amount)))
     cr = math.max (top, math.min (nrow - 1, cr + new - view))
   elseif key == "g" then
     cr, ks.offset, ks.dollar = top, 0, 0
@@ -314,16 +316,16 @@ local function move_cursor (t, ks, key)
     ks.dollar = ln:offset_of (cr, cc) + 1
     ks.offset = ln.l - 1
   elseif key == "H" then
-    cr = t:view_start ()
+    cr = api.view_start (t)
   elseif key == "M" then
-    cr = t:view_start () + math.floor (nrow / 2)
+    cr = api.view_start (t) + math.floor (nrow / 2)
   elseif key == "L" then
-    cr = t:view_start () + nrow - 1
+    cr = api.view_start (t) + nrow - 1
   end
 
   ln = line (t, cr)
   local offset = (ks.dollar > 0 or ks.offset >= ln.l) and ln.l - 1 or ks.offset
-  t:cursor (ln:coord_of (offset))
+  api.cursor (t, ln:coord_of (offset))
 
   status_area (t, ks)
 end
@@ -349,10 +351,10 @@ end
 -- f/F/;/, and the word motions. Unlike the perl version, they start from
 -- the cursor rather than the column remembered for j/k.
 local function move_to (t, ks, key)
-  local cr, cc = t:cursor ()
+  local cr, cc = api.cursor (t)
   local ln = line (t, cr)
   local offset = ln:offset_of (cr, cc)
-  local nrow = t:nrow ()
+  local nrow = api.nrow (t)
   local found
 
   if key == ";" or key == "," then
@@ -383,7 +385,7 @@ local function move_to (t, ks, key)
         found = 0
         break
       end
-      if ln.beg <= t:top_row () then break end
+      if ln.beg <= api.top_row (t) then break end
 
       ln = line (t, ln.beg - 1)
       offset = ln.l
@@ -417,7 +419,7 @@ local function move_to (t, ks, key)
   if found then
     ks.dollar = 0
     ks.offset = found
-    t:cursor (ln:coord_of (found))
+    api.cursor (t, ln:coord_of (found))
   end
 end
 
@@ -427,7 +429,7 @@ end
 -- upper case
 local function set_pattern (ks, text)
   if text ~= "" then
-    ks.pattern = nrxvt.regex (nrxvt.regex_escape (text), UPPER_RE:find (text) and "" or "i")
+    ks.pattern = api.regex (api.regex_escape (text), UPPER_RE:find (text) and "" or "i")
   else
     ks.pattern = nil
   end
@@ -450,7 +452,7 @@ local function find_next (t, ks, dir)
 
   local pattern = ks.pattern
 
-  local cr, cc = t:cursor ()
+  local cr, cc = api.cursor (t)
   local ln = line (t, cr)
   local offset = ln:offset_of (cr, cc)
   if dir > 0 then offset = offset + 1 end
@@ -466,13 +468,13 @@ local function find_next (t, ks, dir)
 
   -- check the other lines with the plain row texts first, which is much
   -- cheaper than splitting them into cells, scrollbacks can be large
-  local top, nrow = t:top_row (), t:nrow ()
+  local top, nrow = api.top_row (t), api.nrow (t)
   local row = dir > 0 and ln.last + 1 or ln.beg - 1
 
   while not byte and row >= top and row < nrow do
-    local beg, last = t:line_bounds (row)
+    local beg, last = api.line_bounds (t, row)
     local parts = {}
-    for r = beg, last do parts[#parts + 1] = (t:line (r)) end
+    for r = beg, last do parts[#parts + 1] = (api.line (t, r)) end
 
     if pattern:find (table.concat (parts)) then
       ln = line (t, row)
@@ -491,7 +493,7 @@ local function find_next (t, ks, dir)
 
   ks.dollar = 0
   ks.offset = offset_at (starts, byte)
-  t:cursor (ln:coord_of (ks.offset))
+  api.cursor (t, ln:coord_of (ks.offset))
   status_area (t, ks)
   return true
 end
@@ -504,9 +506,9 @@ local function activate (t, search)
     search = "", search_dir = 1, search_mode = false,
     -- the number of bytes of ks.search before the prompt's cursor
     search_cur = 0,
-    clipboard = t:resource_boolean ("keyboard-select.clipboard"),
+    clipboard = api.resource_boolean (t, "keyboard-select.clipboard"),
     -- the selection is drawn like urxvt does it
-    hl_sel = t:resource ("highlightColor") ~= nil,
+    hl_sel = api.resource (t, "highlightColor") ~= nil,
   }
 
   if search then
@@ -514,11 +516,11 @@ local function activate (t, search)
     ks.search_cur = 1
   end
 
-  ks.oldcr, ks.oldcc = t:cursor ()
+  ks.oldcr, ks.oldcc = api.cursor (t)
   ks.srhcr, ks.srhcc = ks.oldcr, ks.oldcc
-  ks.old_view_start = t:view_start ()
+  ks.old_view_start = api.view_start (t)
   -- the program is paused, so the cursor can move freely
-  ks.old_pty_events = t:pty_events (nrxvt.EV_NONE)
+  ks.old_pty_events = api.pty_events (t, api.EV_NONE)
 
   local ln = line (t, ks.oldcr)
   ks.offset = ln:offset_of (ks.oldcr, ks.oldcc)
@@ -528,12 +530,12 @@ local function activate (t, search)
 
   if ks.offset >= ln.l then
     ks.offset = ln.l > 0 and ln.l - 1 or 0
-    t:cursor (ln:coord_of (ks.offset))
+    api.cursor (t, ln:coord_of (ks.offset))
   end
 
   show_cursor (t)
   status_area (t, ks)
-  t:refresh ()
+  api.refresh (t)
 end
 
 local function deactivate (t)
@@ -543,10 +545,10 @@ local function deactivate (t)
   if ks.overlay then ks.overlay:close () end
 
   t.keyboard_select = nil
-  t:cursor (ks.oldcr, ks.oldcc)
-  t:view_start (ks.old_view_start)
-  t:pty_events (ks.old_pty_events)
-  t:refresh ()
+  api.cursor (t, ks.oldcr, ks.oldcc)
+  api.view_start (t, ks.old_view_start)
+  api.pty_events (t, ks.old_pty_events)
+  api.refresh (t)
 end
 
 -- key handling
@@ -575,7 +577,7 @@ end
 local function search_append (t, ks, text)
   search_replace (ks, ks.search_cur, ks.search_cur, text)
   set_pattern (ks, ks.search:sub (2))
-  t:cursor (ks.srhcr, ks.srhcc)
+  api.cursor (t, ks.srhcr, ks.srhcc)
   find_next (t, ks)
   status_area (t, ks)
 end
@@ -589,7 +591,7 @@ local function search_paste (t, ks, text)
   text = text:match ("^[^\r\n]*"):gsub ("%c", "")
   if text ~= "" then
     search_append (t, ks, text)
-    t:refresh ()
+    api.refresh (t)
   end
 end
 
@@ -632,14 +634,14 @@ local function search_key (t, ks, ev, key, char, enter)
   elseif enter then
     set_pattern (ks, ks.search:sub (2))
     ks.search = ""
-    t:cursor (ks.srhcr, ks.srhcc)
+    api.cursor (t, ks.srhcr, ks.srhcc)
     if not find_next (t, ks) then
       if ks.search_mode then return deactivate (t) end
       status_area (t, ks)
     end
   elseif ev.ctrl and ev.shift and key:lower () == "v" then
     -- pastes the clipboard
-    t:selection_fetch (true, function (text) search_paste (t, ks, text) end, ev.time)
+    api.selection_fetch (t, true, function (text) search_paste (t, ks, text) end, ev.time)
   elseif char then
     search_append (t, ks, char)
   end
@@ -648,7 +650,7 @@ end
 local function key_press (t, ks, ev, keysym, str)
   -- printable ASCII keysyms are their characters, e.g. "$" for "dollar"
   local key = keysym >= 0x20 and keysym < 0x7f and string.char (keysym)
-              or nrxvt.keysym_name (keysym) or ""
+              or api.keysym_name (keysym) or ""
   local lower = key:lower ()
   local ctrl = ev.ctrl
   -- the typed text, without control characters (or Meta's escape prefix)
@@ -720,24 +722,24 @@ local function key_press (t, ks, ev, keysym, str)
     ks.search = key
     ks.search_cur = 1
     ks.search_dir = key == "?" and -1 or 1
-    ks.srhcr, ks.srhcc = t:cursor ()
+    ks.srhcr, ks.srhcc = api.cursor (t)
     status_area (t, ks)
   elseif lower == "n" then
     find_next (t, ks, ks.search_dir * (key == "N" and -1 or 1))
   end
 
   if t.keyboard_select then show_cursor (t) end
-  t:refresh ()
+  api.refresh (t)
 end
 
-nrxvt.bind (ACTIVATE_KEY, function (t)
+api.bind (ACTIVATE_KEY, function (t)
   -- while active, the key is handled like any other (M-Escape is Escape)
   if t.keyboard_select then return false end
   activate (t)
 end)
 
 if SEARCH_KEY then
-  nrxvt.bind (SEARCH_KEY, function (t)
+  api.bind (SEARCH_KEY, function (t)
     if t.keyboard_select then return false end
     activate (t, true)
   end)
@@ -746,20 +748,20 @@ end
 -- the commands of the perl extension, for keysym resources
 local COMMANDS = { activate = false, search = true }
 
-nrxvt.on_user_command (function (t, cmd)
+api.on_user_command (function (t, cmd)
   local search = COMMANDS[cmd:match ("^keyboard%-select:(.*)$")]
   if search == nil then return end
   if not t.keyboard_select then activate (t, search) end
   return true
 end)
 
-nrxvt.on_action (function (t, ext, action)
+api.on_action (function (t, ext, action)
   if ext ~= "keyboard-select" or COMMANDS[action] == nil then return end
   if not t.keyboard_select then activate (t, COMMANDS[action]) end
   return true
 end)
 
-nrxvt.on_key_press (function (t, ev, keysym, str)
+api.on_key_press (function (t, ev, keysym, str)
   local ks = t.keyboard_select
   if not ks then return end
 
@@ -771,24 +773,24 @@ end)
 
 -- nothing is sent to the program while selecting, a write that has to
 -- wait for the pty would also resume its output
-nrxvt.on_tt_write (function (t)
+api.on_tt_write (function (t)
   return t.keyboard_select ~= nil
 end)
 
 -- draws the selection, the highlight is undone after the refresh
-nrxvt.on_refresh_begin (function (t)
+api.on_refresh_begin (function (t)
   local ks = t.keyboard_select
   if not ks or ks.select == "" then return end
 
-  local cr, cc = t:cursor ()
+  local cr, cc = api.cursor (t)
   local br, bc, er, ec = calc_span (t, ks)
   local hl, reverse_cursor
 
   if ks.hl_sel then
     -- highlightColor is not applied to the cursor
-    hl, reverse_cursor = nrxvt.RS_Sel, false
+    hl, reverse_cursor = api.RS_Sel, false
   else
-    hl, reverse_cursor = nrxvt.RS_RVid, ks.select ~= "l"
+    hl, reverse_cursor = api.RS_RVid, ks.select ~= "l"
   end
 
   if ks.select == "b" then
@@ -802,18 +804,18 @@ nrxvt.on_refresh_begin (function (t)
         if dollar then ec = ln.l end
         local r0, c0 = ln:coord_of (bc)
         local r1, c1 = ln:coord_of (math.min (ec, ln.l))
-        t:xor_span (r0, c0, r1, c1, hl)
+        api.xor_span (t, r0, c0, r1, c1, hl)
       elseif r == cr then
         reverse_cursor = false
       end
       r = ln.last + 1
     end
   else
-    t:xor_span (br, bc, er, ec, hl)
+    api.xor_span (t, br, bc, er, ec, hl)
   end
 
   -- the reversed cursor would be invisible on reversed text
   if reverse_cursor then
-    t:xor_span (cr, cc, cr, cc + 1, hl)
+    api.xor_span (t, cr, cc, cr, cc + 1, hl)
   end
 end)

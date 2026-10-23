@@ -8,6 +8,8 @@
 --
 -- Copy or link this file into ~/.config/nrxvt/plugins to enable it.
 
+local api = nrxvt.api
+
 local OPENER = { "xdg-open" }
 local SELECT_KEY = "M-u"
 
@@ -15,8 +17,8 @@ local SELECT_KEY = "M-u"
 local URL_PATTERN = "%f[%w](%a[%w+.-]*)://[%w%-._~:/?#%[%]@!$&'()*+,;=%%]+"
 local SCHEMES = { http = true, https = true, ftp = true, file = true }
 
-local UNDERLINE = { nrxvt.style { underline = true } }
-local SELECTED = { nrxvt.style { reverse = true } }
+local UNDERLINE = { api.style { underline = true } }
+local SELECTED = { api.style { reverse = true } }
 
 -- longest logical line (in rows) that is scanned, bounds the work for
 -- e.g. huge single line JSON outputs
@@ -63,10 +65,10 @@ end
 local function logical_line (t, row)
   local parts, segments = {}, {}
   local ofs = 0
-  local last = t:nrow () - 1
+  local last = api.nrow (t) - 1
 
   for r = row, math.min (row + MAX_ROWS - 1, last) do
-    local text, wrapped = t:line (r)
+    local text, wrapped = api.line (t, r)
     parts[#parts + 1] = text
     segments[#segments + 1] = { r, ofs + 1, ofs + #text }
     ofs = ofs + #text
@@ -80,7 +82,7 @@ end
 -- the common case of plain ASCII rows
 local function col_of (t, row, text_is_ascii, byte)
   if text_is_ascii then return byte - 1 end
-  return t:col (row, byte)
+  return api.col (t, row, byte)
 end
 
 -- Calls fn (row, c0, c1) for every row part of the byte range [s, e] of a
@@ -101,7 +103,7 @@ end
 local function url_at (t, row, col)
   -- find the start of the logical line
   local start = row
-  while start > t:top_row () and row - start < MAX_ROWS and select (2, t:line (start - 1)) do
+  while start > api.top_row (t) and row - start < MAX_ROWS and select (2, api.line (t, start - 1)) do
     start = start - 1
   end
 
@@ -118,10 +120,10 @@ end
 -- all URLs on screen, top to bottom, as {url, parts = {{row, c0, c1}...}}
 local function visible_urls (t)
   local urls = {}
-  local row = t:view_start ()
-  local last = row + t:nrow () - 1
+  local row = api.view_start (t)
+  local last = row + api.nrow (t) - 1
 
-  while row > t:top_row () and select (2, t:line (row - 1)) do
+  while row > api.top_row (t) and select (2, api.line (t, row - 1)) do
     row = row - 1
   end
 
@@ -143,23 +145,23 @@ end
 local function open (url)
   local argv = { unpack (OPENER) }
   argv[#argv + 1] = url
-  nrxvt.spawn (argv)
+  api.spawn (argv)
 end
 
 -- underline the URLs of every line that changed, this runs only once per
 -- change of a line, not on every refresh
-nrxvt.on_line_update (function (t, row)
+api.on_line_update (function (t, row)
   local text, segments = logical_line (t, row)
   if not text:find ("://", 1, true) then return end
 
   for _, url in ipairs (find_urls (text)) do
     for_each_part (t, text, segments, url[1], url[2], function (r, c0, c1)
-      t:rend (r, c0, c1, unpack (UNDERLINE))
+      api.rend (t, r, c0, c1, unpack (UNDERLINE))
     end)
   end
 end)
 
-nrxvt.on_button_press (function (t, ev)
+api.on_button_press (function (t, ev)
   if ev.button == 1 and ev.ctrl then
     local url = url_at (t, ev.row, ev.col)
     if url then
@@ -169,7 +171,7 @@ nrxvt.on_button_press (function (t, ev)
   end
 end)
 
-nrxvt.on_button_release (function (t, ev)
+api.on_button_release (function (t, ev)
   if ev.button == 1 and t.links_pressed then
     -- only open if the release happened on the same URL
     if url_at (t, ev.row, ev.col) == t.links_pressed then
@@ -182,28 +184,28 @@ end)
 
 -- keyboard selection
 
-nrxvt.bind (SELECT_KEY, function (t)
+api.bind (SELECT_KEY, function (t)
   local urls = visible_urls (t)
   if #urls == 0 then return end
 
   t.links_select = { urls = urls, index = #urls }
-  t:refresh ()
+  api.refresh (t)
 end)
 
-nrxvt.on_refresh_begin (function (t)
+api.on_refresh_begin (function (t)
   local select = t.links_select
   if select then
     for _, part in ipairs (select.urls[select.index].parts) do
-      t:highlight (part[1], part[2], part[3], unpack (SELECTED))
+      api.highlight (t, part[1], part[2], part[3], unpack (SELECTED))
     end
   end
 end)
 
-nrxvt.on_key_press (function (t, ev, keysym, str)
+api.on_key_press (function (t, ev, keysym, str)
   local select = t.links_select
   if not select then return end
 
-  local key = nrxvt.keysym_name (keysym)
+  local key = api.keysym_name (keysym)
 
   if key == "Up" or key == "k" then
     select.index = math.max (1, select.index - 1)
@@ -213,18 +215,18 @@ nrxvt.on_key_press (function (t, ev, keysym, str)
     open (select.urls[select.index].url)
     t.links_select = nil
   elseif key == "y" then
-    t:set_selection (select.urls[select.index].url, true)
+    api.set_selection (t, select.urls[select.index].url, true)
     t.links_select = nil
   elseif key == "Escape" or key == "q" then
     t.links_select = nil
   end
 
   -- every key is consumed while selecting
-  t:refresh ()
+  api.refresh (t)
   return true
 end)
 
 -- the view moved, the selected URLs might not be on screen anymore
-nrxvt.on_view_change (function (t)
+api.on_view_change (function (t)
   t.links_select = nil
 end)

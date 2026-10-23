@@ -28,7 +28,7 @@ def wait_for(predicate, timeout=3):
 
 
 CONTROLLER = r'''
-local function reply(t, s) t:write("BAR:" .. s .. "\n") end
+local function reply(t, s) nrxvt.api.write(t, "BAR:" .. s .. "\n") end
 local function input(t, bar, ev)
   if ev.type == "resize" then return end
   reply(t, "event " .. ev.type .. " " .. (ev.id or "root") .. " " .. (ev.x or 0) .. " " .. (ev.y or 0))
@@ -41,11 +41,11 @@ local function input(t, bar, ev)
     end
   end
 end
-nrxvt.on_init(function (t)
+nrxvt.api.on_init(function (t)
   t.test_bars = {}
   if os.getenv("BAR_TEST_SCROLLBAR") == "1" then return end
   local function add(name, edge, thickness, priority)
-    local bar = t:new_bar {edge=edge, thickness=thickness, priority=priority, on_event=input}
+    local bar = nrxvt.api.new_bar(t, {edge=edge, thickness=thickness, priority=priority, on_event=input})
     t.test_bars[name] = bar
   end
   add("top", "top", 24, 0)
@@ -63,12 +63,12 @@ nrxvt.on_init(function (t)
   }}
   t.test_bars.top:submit(t.test_tree)
 end)
-nrxvt.on_osc_seq(function (t, op, args)
+nrxvt.api.on_osc_seq(function (t, op, args)
   if op ~= 777 then return end
   local cmd, name = args:match("^(%S+)%s*(.*)$")
   local b = t.test_bars[name]
   if cmd == "state" then
-    reply(t, "state " .. t:ncol() .. " " .. t:nrow() .. " " .. t:top_row() .. " " .. t:view_start() .. " " .. t:current_screen())
+    reply(t, "state " .. nrxvt.api.ncol(t) .. " " .. nrxvt.api.nrow(t) .. " " .. nrxvt.api.top_row(t) .. " " .. nrxvt.api.view_start(t) .. " " .. nrxvt.api.current_screen(t))
   elseif cmd == "geometry" then
     reply(t, "geometry " .. table.concat({b:geometry()}, " "))
   elseif cmd == "same" then
@@ -89,13 +89,13 @@ nrxvt.on_osc_seq(function (t, op, args)
     b:visible(cmd == "show"); reply(t, "ok")
   elseif cmd == "close" then b:close(); b:close(); reply(t, "ok")
   elseif cmd == "new" then
-    t.test_bars.dynamic = t:new_bar {edge="left", thickness=4, priority=10}
+    t.test_bars.dynamic = nrxvt.api.new_bar(t, {edge="left", thickness=4, priority=10})
     reply(t, "ok")
   elseif cmd == "action" then t.bar_action = name; reply(t, "ok")
   elseif cmd == "scrollbar" then
     local s=t.lua_scrollbar
     reply(t, "scrollbar " .. tostring(s.bar:visible()) .. " " .. table.concat({s.bar:geometry()}, " "))
-  elseif cmd == "view" then t:view_start(tonumber(name)); reply(t, "ok")
+  elseif cmd == "view" then nrxvt.api.view_start(t, tonumber(name)); reply(t, "ok")
   elseif cmd == "invalid" then
     local bad = {
       {children={{id="dup",size={px=1}}, {id="dup",size={px=2}}}},
