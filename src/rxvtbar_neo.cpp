@@ -637,7 +637,7 @@ void bar::close ()
 
 static bar *check_bar (lua_State *L)
 {
-  auto *handle = (bar_handle *)luaL_checkudata (L, 1, "urxvt.bar");
+  auto *handle = (bar_handle *)luaL_checkudata (L, 1, "nrxvt.bar");
   bar *b = handle->value.get ();
   if (!b || !b->term) luaL_error (L, "bar has been closed");
   return b;
@@ -722,14 +722,14 @@ static int release (lua_State *L) { check_bar (L)->cancel (0); return 0; }
 
 static int close (lua_State *L)
 {
-  auto *handle = (bar_handle *)luaL_checkudata (L, 1, "urxvt.bar");
+  auto *handle = (bar_handle *)luaL_checkudata (L, 1, "nrxvt.bar");
   handle->value->close ();
   return 0;
 }
 
 static int gc (lua_State *L)
 {
-  auto *handle = (bar_handle *)luaL_checkudata (L, 1, "urxvt.bar");
+  auto *handle = (bar_handle *)luaL_checkudata (L, 1, "nrxvt.bar");
   handle->~bar_handle ();
   return 0;
 }
@@ -946,7 +946,7 @@ int rxvt_bar_new (lua_State *L)
       require (sum <= 32767 - 2 * term->int_bwidth - max (term->fwidth, term->fheight), "bar reservations exceed X11 geometry limits");
       auto *handle = (bar_handle *)lua_newuserdata (L, sizeof (bar_handle));
       new (handle) bar_handle;
-      luaL_getmetatable (L, "urxvt.bar"); lua_setmetatable (L, -2);
+      luaL_getmetatable (L, "nrxvt.bar"); lua_setmetatable (L, -2);
       handle->value = std::make_shared<bar> (manager, edge, thickness, priority, shown);
       bar *b = handle->value.get ();
       lua_pushvalue (L, -2);
@@ -971,7 +971,7 @@ void rxvt_bar_register (lua_State *L)
     {"submit", submit}, {"visible", visible}, {"geometry", geometry},
     {"capture", capture}, {"release", release}, {"close", close}, {0, 0}
   };
-  luaL_newmetatable (L, "urxvt.bar");
+  luaL_newmetatable (L, "nrxvt.bar");
   lua_newtable (L); luaL_register (L, 0, methods); lua_setfield (L, -2, "__index");
   lua_pushcfunction (L, gc); lua_setfield (L, -2, "__gc");
   lua_pop (L, 1);

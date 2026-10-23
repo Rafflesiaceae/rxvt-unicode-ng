@@ -37,8 +37,6 @@
 --
 -- Copy or link this file into ~/.config/urxvt/plugins to enable it.
 
-local urxvt = require "urxvt"
-
 local ACTIVATE_KEY = "M-Escape"
 -- e.g. "M-s", which search.lua uses as well
 local SEARCH_KEY = nil
@@ -46,13 +44,13 @@ local SEARCH_KEY = nil
 -- character classes for the word motions, like \s, \w and the rest in the
 -- regular expressions of the perl version
 local SPACE, WORD, PUNCT = 0, 1, 2
-local SPACE_RE, WORD_RE = urxvt.regex ("^\\s"), urxvt.regex ("^\\w")
+local SPACE_RE, WORD_RE = nrxvt.regex ("^\\s"), nrxvt.regex ("^\\w")
 -- search texts with upper case letters are case-sensitive
-local UPPER_RE = urxvt.regex ("[[:upper:]]")
+local UPPER_RE = nrxvt.regex ("[[:upper:]]")
 
 -- the cursor of the search prompt is drawn reversed, the text isn't
-local PROMPT_TEXT = { urxvt.style { reverse = false } }
-local PROMPT_CURSOR = { urxvt.style { reverse = true } }
+local PROMPT_TEXT = { nrxvt.style { reverse = false } }
+local PROMPT_CURSOR = { nrxvt.style { reverse = true } }
 
 -- the keys of move_cursor, those in SCROLL_KEYS only with Control
 local CURSOR_KEYS = { g = true, G = true, ["0"] = true, ["^"] = true, ["$"] = true, H = true, M = true, L = true }
@@ -429,7 +427,7 @@ end
 -- upper case
 local function set_pattern (ks, text)
   if text ~= "" then
-    ks.pattern = urxvt.regex (urxvt.regex_escape (text), UPPER_RE:find (text) and "" or "i")
+    ks.pattern = nrxvt.regex (nrxvt.regex_escape (text), UPPER_RE:find (text) and "" or "i")
   else
     ks.pattern = nil
   end
@@ -520,7 +518,7 @@ local function activate (t, search)
   ks.srhcr, ks.srhcc = ks.oldcr, ks.oldcc
   ks.old_view_start = t:view_start ()
   -- the program is paused, so the cursor can move freely
-  ks.old_pty_events = t:pty_events (urxvt.EV_NONE)
+  ks.old_pty_events = t:pty_events (nrxvt.EV_NONE)
 
   local ln = line (t, ks.oldcr)
   ks.offset = ln:offset_of (ks.oldcr, ks.oldcc)
@@ -650,7 +648,7 @@ end
 local function key_press (t, ks, ev, keysym, str)
   -- printable ASCII keysyms are their characters, e.g. "$" for "dollar"
   local key = keysym >= 0x20 and keysym < 0x7f and string.char (keysym)
-              or urxvt.keysym_name (keysym) or ""
+              or nrxvt.keysym_name (keysym) or ""
   local lower = key:lower ()
   local ctrl = ev.ctrl
   -- the typed text, without control characters (or Meta's escape prefix)
@@ -732,14 +730,14 @@ local function key_press (t, ks, ev, keysym, str)
   t:refresh ()
 end
 
-urxvt.bind (ACTIVATE_KEY, function (t)
+nrxvt.bind (ACTIVATE_KEY, function (t)
   -- while active, the key is handled like any other (M-Escape is Escape)
   if t.keyboard_select then return false end
   activate (t)
 end)
 
 if SEARCH_KEY then
-  urxvt.bind (SEARCH_KEY, function (t)
+  nrxvt.bind (SEARCH_KEY, function (t)
     if t.keyboard_select then return false end
     activate (t, true)
   end)
@@ -790,9 +788,9 @@ function M.on_refresh_begin (t)
 
   if ks.hl_sel then
     -- highlightColor is not applied to the cursor
-    hl, reverse_cursor = urxvt.RS_Sel, false
+    hl, reverse_cursor = nrxvt.RS_Sel, false
   else
-    hl, reverse_cursor = urxvt.RS_RVid, ks.select ~= "l"
+    hl, reverse_cursor = nrxvt.RS_RVid, ks.select ~= "l"
   end
 
   if ks.select == "b" then

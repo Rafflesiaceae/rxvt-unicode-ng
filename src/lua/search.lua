@@ -12,24 +12,22 @@
 --
 -- Copy or link this file into ~/.config/urxvt/plugins to enable it.
 
-local urxvt = require "urxvt"
-
 local SEARCH_KEY = "M-s"
 
-local MATCH = { urxvt.style { reverse = true } }
-local CURRENT = { urxvt.style { fg = 0, bg = 11, reverse = false } }
+local MATCH = { nrxvt.style { reverse = true } }
+local CURRENT = { nrxvt.style { fg = 0, bg = 11, reverse = false } }
 
 -- the prompt overlay covers the last three rows (one plus its border)
 local PROMPT_ROWS = 3
 
-local UPPER = urxvt.regex ("[[:upper:]]")
+local UPPER = nrxvt.regex ("[[:upper:]]")
 
 -- Sets the query, search.needle is the literal regex that is actually
 -- searched for: smart case, i.e. case-insensitive unless the query
 -- contains upper case letters.
 local function set_query (search, query)
   search.query = query
-  search.needle = query ~= "" and urxvt.regex (urxvt.regex_escape (query), UPPER:find (query) and "" or "i") or nil
+  search.needle = query ~= "" and nrxvt.regex (nrxvt.regex_escape (query), UPPER:find (query) and "" or "i") or nil
 end
 
 -- number of characters of an UTF-8 string
@@ -147,7 +145,7 @@ local function step (t, search, older)
   if row then update (t, search, row, s) end
 end
 
-urxvt.bind (SEARCH_KEY, function (t)
+nrxvt.bind (SEARCH_KEY, function (t)
   local search = t.search
   if search then
     return step (t, search, true)
@@ -167,7 +165,7 @@ function M.on_key_press (t, ev, keysym, str)
   local search = t.search
   if not search then return end
 
-  local key = urxvt.keysym_name (keysym)
+  local key = nrxvt.keysym_name (keysym)
 
   if key == "Escape" or (ev.ctrl and key == "g") then
     stop (t, search, true)

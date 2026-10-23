@@ -26,15 +26,14 @@ their settings (keys, opener, ...) at the top of the files.
 
 ## Writing plugins
 
-A plugin returns a table of hook functions:
+The implicit `nrxvt` global is available before plugins are loaded. No
+`require` call is needed. A plugin returns a table of hook functions:
 
 ```lua
-local urxvt = require "urxvt"
-
 local M = {}
 
 function M.on_start (t)
-  urxvt.warn ("terminal with " .. t:nrow () .. " rows started")
+  nrxvt.warn ("terminal with " .. t:nrow () .. " rows started")
 end
 
 -- typing "!" rings the bell instead of sending it
@@ -74,12 +73,12 @@ byte offset to a column.
 
 ### Renditions
 
-Renditions (colors and attributes) are 32-bit masks. `urxvt.style` builds a
+Renditions (colors and attributes) are 32-bit masks. `nrxvt.style` builds a
 pair of masks, and the functions that take one apply
 `rend = (rend & and_mask) | or_mask`:
 
 ```lua
-local URL = { urxvt.style { underline = true, fg = 4 } }
+local URL = { nrxvt.style { underline = true, fg = 4 } }
 t:rend (row, c0, c1, unpack (URL))
 ```
 
@@ -142,7 +141,7 @@ arguments are listed after `t`. X events (`ev`) are tables with `type`,
 | `t:cells (row)` | table with the UTF-8 text of each cell of a row, column `col` at index `col + 1`, `""` for the second column of wide characters. Rows that continue on the next row have `t:ncol ()` cells, so the cells of the rows `beg` to `end` together are the `len` cells of the logical line |
 | `t:rend (row, c0, c1, and_mask, or_mask)` | changes the rendition of columns `[c0, c1)` until the line changes again |
 | `t:highlight (row, c0, c1, and_mask, or_mask)` | like `t:rend`, but only for the current redraw (only allowed in `on_refresh_begin`) |
-| `t:xor_span (r0, c0, r1, c1 [, mask])` | XORs `mask` (default `urxvt.RS_RVid`) into the renditions from `(r0, c0)` to `(r1, c1)` (exclusive), the rows in between completely, like perl's `scr_xor_span`. Like `t:highlight`, only allowed in `on_refresh_begin` and undone after the redraw |
+| `t:xor_span (r0, c0, r1, c1 [, mask])` | XORs `mask` (default `nrxvt.RS_RVid`) into the renditions from `(r0, c0)` to `(r1, c1)` (exclusive), the rows in between completely, like perl's `scr_xor_span`. Like `t:highlight`, only allowed in `on_refresh_begin` and undone after the redraw |
 | `t:xor_rect (r0, c0, r1, c1 [, mask1 [, mask2]])` | the same for the columns `[c0, c1)` of the rows `r0` to `r1`, `mask2` (default `RS_RVid + RS_Uline`) goes to the trailing blanks but the first, like rectangular selections and perl's `scr_xor_rect` |
 | `t:overlay (x, y, w, h)` | opens the overlay box (there is one per terminal), negative `x`/`y` count from the right/bottom, the border adds one cell on each side |
 | `t:overlay_text (x, y, text [, and_mask, or_mask])` | writes into the overlay |
@@ -152,7 +151,7 @@ arguments are listed after `t`. X events (`ev`) are tables with `type`,
 | `t:write (data)` | sends data to the program, as if typed |
 | `t:feed (data)` | processes data as if the program had output it |
 | `t:refresh ()` | schedules a redraw, needed after changes outside of hooks, e.g. in timers |
-| `t:pty_events ([events])` | the events (`urxvt.EV_READ`, `urxvt.EV_WRITE`) urxvt waits for on the pty, changed first if given. `urxvt.EV_NONE` pauses the program output until the returned old value is restored. Writes to the program that can't be sent at once (keys that are not consumed, `t:write`) resume it, consume them with `on_tt_write` while paused |
+| `t:pty_events ([events])` | the events (`nrxvt.EV_READ`, `nrxvt.EV_WRITE`) urxvt waits for on the pty, changed first if given. `nrxvt.EV_NONE` pauses the program output until the returned old value is restored. Writes to the program that can't be sent at once (keys that are not consumed, `t:write`) resume it, consume them with `on_tt_write` while paused |
 | `t:selection ([clipboard])` | the PRIMARY (or CLIPBOARD) selection text, or nil |
 | `t:set_selection (text [, clipboard])` | sets and claims the selection |
 | `t:selection_beg ([row, col])`, `t:selection_end (...)`, `t:selection_mark (...)` | the start, the (exclusive) end and the mark of the selection, set first if given. Like in perl, an end column 0 means the end of the previous row, and columns beyond the text of the row the whole row including its newline |
@@ -207,7 +206,7 @@ function M.on_init(t)
     edge = "bottom", thickness = 24, priority = 0,
     on_event = function(term, bar, ev)
       if ev.type == "button_press" and ev.button == 1 then
-        urxvt.warn("clicked " .. (ev.id or "the bar background"))
+        nrxvt.warn("clicked " .. (ev.id or "the bar background"))
       end
     end,
   }
@@ -251,9 +250,7 @@ For a shortcut that should only run on the primary screen, query the screen
 when the key is pressed:
 
 ```lua
-local urxvt = require "urxvt"
-
-urxvt.bind ("C-S-K", function (t)
+nrxvt.bind ("C-S-K", function (t)
   -- Leave the key to the application while the alternate screen is active.
   if t:current_screen () == 1 then return false end
   t:prompt_jump (-1)
@@ -283,8 +280,8 @@ formats explicitly, for example from `on_osc_seq`, and use the same navigation:
 
 ```lua
 -- Add alternative shortcuts for the built-in prompt navigation.
-urxvt.bind ("M-Up", function (t) t:prompt_jump (-1) end)
-urxvt.bind ("M-Down", function (t) t:prompt_jump (1) end)
+nrxvt.bind ("M-Up", function (t) t:prompt_jump (-1) end)
+nrxvt.bind ("M-Down", function (t) t:prompt_jump (1) end)
 ```
 
 Inside a hook, `t:prompt_marker ((t:cursor ()), true)` marks the cursor row.
@@ -294,27 +291,27 @@ can change or expire when output scrolls or the terminal resizes, so query them
 again when needed. Markers are separate from cell renditions, so highlighting
 and styling plugins do not overwrite them.
 
-## The urxvt module
+## The nrxvt global
 
 | function | description |
 |---|---|
-| `urxvt.bind (key, fn)` | calls `fn (t)` when `key` is pressed, using the keysym resource syntax (e.g. `"M-s"`, `"C-S-Up"`). The key is consumed unless `fn` returns `false`. As with keysym resources, extra modifiers are ignored. |
-| `urxvt.style {fg=, bg=, bold=, italic=, underline=, reverse=, blink=}` | returns `and_mask, or_mask`. Colors are indices (0-15 for the basic colors) or `"default"`. Attributes set to `true` are added, set to `false` are removed, and omitted ones are left alone. |
-| `urxvt.timer (after, fn [, repeat])` | calls `fn ()` after `after` seconds, then every `repeat` seconds. Returns a timer with `:start ([after [, repeat]])` and `:stop ()`. Active timers don't need to be referenced, and they never keep urxvt running. |
-| `urxvt.spawn (argv)` | starts a detached program. `argv` is an argument table, or a string run with `/bin/sh -c`. |
-| `urxvt.regex (pattern [, flags])` | compiles a perl compatible regular expression, see below |
-| `urxvt.regex_escape (s)` | escapes `s` to match literally, like perl's `quotemeta` or `\Q...\E` |
-| `urxvt.keysym_name (keysym)` | e.g. `"Return"` |
-| `urxvt.warn (msg)` | prints to stderr |
-| `urxvt.version`, `urxvt.plugin_dir` | |
-| `urxvt.EV_NONE`, `EV_READ`, `EV_WRITE` | for `t:pty_events` |
-| `urxvt.RS_Bold`, `RS_Italic`, `RS_Blink`, `RS_RVid`, `RS_Uline`, `RS_Sel` | rendition bits, e.g. for `t:xor_span`. urxvt draws selections with `RS_Sel + RS_RVid`: reversed, or in `highlightColor`/`highlightTextColor` instead if those are set |
+| `nrxvt.bind (key, fn)` | calls `fn (t)` when `key` is pressed, using the keysym resource syntax (e.g. `"M-s"`, `"C-S-Up"`). The key is consumed unless `fn` returns `false`. As with keysym resources, extra modifiers are ignored. |
+| `nrxvt.style {fg=, bg=, bold=, italic=, underline=, reverse=, blink=}` | returns `and_mask, or_mask`. Colors are indices (0-15 for the basic colors) or `"default"`. Attributes set to `true` are added, set to `false` are removed, and omitted ones are left alone. |
+| `nrxvt.timer (after, fn [, repeat])` | calls `fn ()` after `after` seconds, then every `repeat` seconds. Returns a timer with `:start ([after [, repeat]])` and `:stop ()`. Active timers don't need to be referenced, and they never keep urxvt running. |
+| `nrxvt.spawn (argv)` | starts a detached program. `argv` is an argument table, or a string run with `/bin/sh -c`. |
+| `nrxvt.regex (pattern [, flags])` | compiles a perl compatible regular expression, see below |
+| `nrxvt.regex_escape (s)` | escapes `s` to match literally, like perl's `quotemeta` or `\Q...\E` |
+| `nrxvt.keysym_name (keysym)` | e.g. `"Return"` |
+| `nrxvt.warn (msg)` | prints to stderr |
+| `nrxvt.version`, `nrxvt.plugin_dir` | |
+| `nrxvt.EV_NONE`, `EV_READ`, `EV_WRITE` | for `t:pty_events` |
+| `nrxvt.RS_Bold`, `RS_Italic`, `RS_Blink`, `RS_RVid`, `RS_Uline`, `RS_Sel` | rendition bits, e.g. for `t:xor_span`. urxvt draws selections with `RS_Sel + RS_RVid`: reversed, or in `highlightColor`/`highlightTextColor` instead if those are set |
 
 The LuaJIT `ffi` and `jit` modules are available as usual.
 
 ### Regular expressions
 
-`urxvt.regex` takes the place of perl's regexes, so patterns from perl
+`nrxvt.regex` takes the place of perl's regexes, so patterns from perl
 extension resources (e.g. `URxvt.matcher.pattern.1`) generally work
 unchanged. It is
 backed by PCRE2, which the lua plugin system always comes with. Patterns
@@ -340,11 +337,11 @@ error when it hits PCRE2's match limit, e.g. with catastrophic
 backtracking, instead of freezing the terminal.
 
 ```lua
-local URL = urxvt.regex ([[\bhttps?://[^\s<>"]+]], "i")
+local URL = nrxvt.regex ([[\bhttps?://[^\s<>"]+]], "i")
 
 for s, e in URL:gfind (t:line (row)) do ... end
 
 -- a literal search, caseless unless the query contains upper case
-local query = urxvt.regex (urxvt.regex_escape (text),
-                           urxvt.regex ("\\p{Lu}"):find (text) and "" or "i")
+local query = nrxvt.regex (nrxvt.regex_escape (text),
+                           nrxvt.regex ("\\p{Lu}"):find (text) and "" or "i")
 ```

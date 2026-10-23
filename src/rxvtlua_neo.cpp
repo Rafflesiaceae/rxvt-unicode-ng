@@ -33,7 +33,7 @@
 
 #include <lua.hpp>
 
-// urxvt.regex works on UTF-8 strings, the 8 bit library
+// nrxvt.regex works on UTF-8 strings, the 8 bit library
 #define PCRE2_CODE_UNIT_WIDTH 8
 #include <pcre2.h>
 
@@ -53,10 +53,10 @@ static int term_mt_ref;         // metatable of terminal objects
 static int traceback_ref;       // debug.traceback
 
 // the terminal the current hook/plugin code runs for, needed by functions
-// that are not methods (urxvt.bind needs a terminal to parse keysyms)
+// that are not methods (nrxvt.bind needs a terminal to parse keysyms)
 static rxvt_term *cur_term;
 
-// key bindings registered with urxvt.bind
+// key bindings registered with nrxvt.bind
 struct lua_binding
 {
   KeySym sym;
@@ -773,7 +773,7 @@ check_xor_args (lua_State *L, rxvt_term *term, int &r0, int &c0, int &r1, int &c
 }
 
 // t:xor_span (r0, c0, r1, c1 [, mask]) - like perl's scr_xor_span, XORs
-// mask (default urxvt.RS_RVid) into the renditions from (r0, c0) up to,
+// mask (default nrxvt.RS_RVid) into the renditions from (r0, c0) up to,
 // but not including, (r1, c1), rows in between are covered completely.
 // Like t:highlight, it is only allowed in on_refresh_begin and undone
 // after the refresh.
@@ -802,9 +802,9 @@ t_xor_span (lua_State *L)
 }
 
 // t:xor_rect (r0, c0, r1, c1 [, mask1 [, mask2]]) - like perl's
-// scr_xor_rect, XORs mask1 (default urxvt.RS_RVid) into the columns
+// scr_xor_rect, XORs mask1 (default nrxvt.RS_RVid) into the columns
 // [c0, c1) of the rows r0 to r1 (inclusive), and mask2 (default
-// urxvt.RS_RVid + urxvt.RS_Uline) into the trailing blanks of each row but
+// nrxvt.RS_RVid + nrxvt.RS_Uline) into the trailing blanks of each row but
 // the first one, which is how urxvt shows rectangular selections. Only
 // allowed in on_refresh_begin, undone after the refresh.
 static int
@@ -876,8 +876,8 @@ t_refresh (lua_State *L)
 }
 
 // t:pty_events ([events]) -> previous events
-// Like perl's pty_ev_events, the I/O events (urxvt.EV_READ, urxvt.EV_WRITE)
-// urxvt waits for on the pty, changed to events if given. urxvt.EV_NONE
+// Like perl's pty_ev_events, the I/O events (nrxvt.EV_READ, nrxvt.EV_WRITE)
+// urxvt waits for on the pty, changed to events if given. nrxvt.EV_NONE
 // pauses the program output until the old events are restored. Writes to
 // the program that can't be sent at once resume it, as urxvt then waits
 // for the pty to become writable (and readable) again.
@@ -1043,7 +1043,7 @@ swap_overlays (rxvt_term *term, bool in)
 static lua_overlay *
 check_overlay (lua_State *L)
 {
-  lua_overlay *ov = (lua_overlay *)luaL_checkudata (L, 1, "urxvt.overlay");
+  lua_overlay *ov = (lua_overlay *)luaL_checkudata (L, 1, "nrxvt.overlay");
 
   if (!ov->term)
     luaL_error (L, "overlay has been closed");
@@ -1073,7 +1073,7 @@ t_new_overlay (lua_State *L)
 
   lua_overlay *ov = (lua_overlay *)lua_newuserdata (L, sizeof (lua_overlay));
   memset (ov, 0, sizeof (*ov));
-  luaL_getmetatable (L, "urxvt.overlay");
+  luaL_getmetatable (L, "nrxvt.overlay");
   lua_setmetatable (L, -2);
 
   ov->term = term;
@@ -1218,7 +1218,7 @@ overlay_hide (lua_State *L)
 static int
 overlay_close (lua_State *L)
 {
-  lua_overlay *ov = (lua_overlay *)luaL_checkudata (L, 1, "urxvt.overlay");
+  lua_overlay *ov = (lua_overlay *)luaL_checkudata (L, 1, "nrxvt.overlay");
   ov->close (L);
   return 0;
 }
@@ -1556,9 +1556,9 @@ static const luaL_Reg term_methods[] = {
 };
 
 /////////////////////////////////////////////////////////////////////////////
-// urxvt module
+// nrxvt global
 
-// urxvt.bind (keyspec, fn) - calls fn (t) when keyspec (keysym resource
+// nrxvt.bind (keyspec, fn) - calls fn (t) when keyspec (keysym resource
 // syntax, e.g. "M-s" or "C-S-Up") is pressed. The key is consumed unless fn
 // returns false. Like keysym resources, extra modifiers are ignored.
 static int
@@ -1568,7 +1568,7 @@ u_bind (lua_State *L)
   luaL_checktype (L, 2, LUA_TFUNCTION);
 
   if (!cur_term)
-    return luaL_error (L, "urxvt.bind needs to be called from plugin or hook code");
+    return luaL_error (L, "nrxvt.bind needs to be called from plugin or hook code");
 
   lua_binding b;
   int sym = cur_term->parse_keysym (spec, b.state);
@@ -1585,7 +1585,7 @@ u_bind (lua_State *L)
   return 0;
 }
 
-// urxvt.style {fg=, bg=, bold=, italic=, underline=, reverse=, blink=}
+// nrxvt.style {fg=, bg=, bold=, italic=, underline=, reverse=, blink=}
 //   -> and_mask, or_mask
 // fg/bg are color indices (0-15 for the basic colors) or "default", the
 // attributes are set (true) or cleared (false), omitted ones stay as they are.
@@ -1652,7 +1652,7 @@ u_style (lua_State *L)
   return 2;
 }
 
-// urxvt.spawn (argv) - starts a detached program, argv is a table of
+// nrxvt.spawn (argv) - starts a detached program, argv is a table of
 // arguments or a string for /bin/sh -c. Returns whether fork succeeded.
 static int
 u_spawn (lua_State *L)
@@ -1669,7 +1669,7 @@ u_spawn (lua_State *L)
       int n = lua_objlen (L, 1);
 
       if (n < 1)
-        return luaL_error (L, "urxvt.spawn needs a program to run");
+        return luaL_error (L, "nrxvt.spawn needs a program to run");
 
       // lives on the lua stack, so it is freed even if an argument is bad
       argv = (const char **)lua_newuserdata (L, (n + 1) * sizeof (char *));
@@ -1717,7 +1717,7 @@ u_spawn (lua_State *L)
   return 1;
 }
 
-// timers created by urxvt.timer
+// timers created by nrxvt.timer
 struct lua_timer
 {
   ev::timer w;
@@ -1775,7 +1775,7 @@ lua_timer::cb (ev::timer &w, int revents)
 static lua_timer *
 check_timer (lua_State *L)
 {
-  return (lua_timer *)luaL_checkudata (L, 1, "urxvt.timer");
+  return (lua_timer *)luaL_checkudata (L, 1, "nrxvt.timer");
 }
 
 // timer:start ([after [, repeat]]) - (re)starts the timer
@@ -1821,7 +1821,7 @@ timer_gc (lua_State *L)
   return 0;
 }
 
-// urxvt.timer (after, fn [, repeat]) -> timer
+// nrxvt.timer (after, fn [, repeat]) -> timer
 // Calls fn after `after` seconds and then every `repeat` seconds, if given.
 // Active timers stay alive without references, stop them with timer:stop.
 // They don't keep urxvt running once all terminals are closed.
@@ -1833,7 +1833,7 @@ u_timer (lua_State *L)
   double repeat = luaL_optnumber (L, 3, 0.);
 
   lua_timer *timer = new (lua_newuserdata (L, sizeof (lua_timer))) lua_timer;
-  luaL_getmetatable (L, "urxvt.timer");
+  luaL_getmetatable (L, "nrxvt.timer");
   lua_setmetatable (L, -2);
 
   timer->L = L;
@@ -1850,7 +1850,7 @@ u_timer (lua_State *L)
   return 1;
 }
 
-// urxvt.warn (msg) - prints a message on stderr
+// nrxvt.warn (msg) - prints a message on stderr
 static int
 u_warn (lua_State *L)
 {
@@ -1858,7 +1858,7 @@ u_warn (lua_State *L)
   return 0;
 }
 
-// urxvt.keysym_name (keysym) -> name of a keysym, e.g. "Return", or nil
+// nrxvt.keysym_name (keysym) -> name of a keysym, e.g. "Return", or nil
 static int
 u_keysym_name (lua_State *L)
 {
@@ -1869,7 +1869,7 @@ u_keysym_name (lua_State *L)
 /////////////////////////////////////////////////////////////////////////////
 // regular expressions (PCRE2), the replacement for the perl regexes
 
-// a compiled pattern, the userdata of urxvt.regex objects
+// a compiled pattern, the userdata of nrxvt.regex objects
 struct lua_regex
 {
   pcre2_code *code;
@@ -1880,7 +1880,7 @@ struct lua_regex
 static lua_regex *
 check_regex (lua_State *L)
 {
-  return (lua_regex *)luaL_checkudata (L, 1, "urxvt.regex");
+  return (lua_regex *)luaL_checkudata (L, 1, "nrxvt.regex");
 }
 
 static int
@@ -1896,7 +1896,7 @@ regex_gc (lua_State *L)
   return 0;
 }
 
-// urxvt.regex (pattern [, flags]) -> regex
+// nrxvt.regex (pattern [, flags]) -> regex
 // Compiles a perl compatible regular expression, raising an error if it is
 // invalid. flags is a string of perl modifiers: i (caseless), m (multiline),
 // s (dot matches newlines) and x (extended). Patterns and subjects are
@@ -1927,7 +1927,7 @@ u_regex (lua_State *L)
   re->code = 0;
   re->md = 0;
   re->ncap = 0;
-  luaL_getmetatable (L, "urxvt.regex");
+  luaL_getmetatable (L, "nrxvt.regex");
   lua_setmetatable (L, -2);
 
   int err;
@@ -2116,7 +2116,7 @@ static const luaL_Reg regex_methods[] = {
   { 0, 0 }
 };
 
-// urxvt.regex_escape (s) -> s with every ASCII character besides letters,
+// nrxvt.regex_escape (s) -> s with every ASCII character besides letters,
 // digits and "_" escaped, so it matches literally, like perl's quotemeta
 static int
 u_regex_escape (lua_State *L)
@@ -2298,11 +2298,11 @@ create_state (rxvt_term *term, const char *dir, char **plugins)
   lua_newtable (L);
   luaL_register (L, 0, term_methods);
   lua_setfield (L, -2, "__index");
-  lua_pushliteral (L, "urxvt.terminal");
+  lua_pushliteral (L, "nrxvt.terminal");
   lua_setfield (L, -2, "__name");
   term_mt_ref = luaL_ref (L, LUA_REGISTRYINDEX);
 
-  luaL_newmetatable (L, "urxvt.timer");
+  luaL_newmetatable (L, "nrxvt.timer");
   lua_newtable (L);
   lua_pushcfunction (L, timer_start);
   lua_setfield (L, -2, "start");
@@ -2313,7 +2313,7 @@ create_state (rxvt_term *term, const char *dir, char **plugins)
   lua_setfield (L, -2, "__gc");
   lua_pop (L, 1);
 
-  luaL_newmetatable (L, "urxvt.overlay");
+  luaL_newmetatable (L, "nrxvt.overlay");
   lua_newtable (L);
   luaL_register (L, 0, overlay_methods);
   lua_setfield (L, -2, "__index");
@@ -2321,7 +2321,7 @@ create_state (rxvt_term *term, const char *dir, char **plugins)
   lua_setfield (L, -2, "__gc");
   lua_pop (L, 1);
 
-  luaL_newmetatable (L, "urxvt.regex");
+  luaL_newmetatable (L, "nrxvt.regex");
   lua_newtable (L);
   luaL_register (L, 0, regex_methods);
   lua_setfield (L, -2, "__index");
@@ -2329,8 +2329,11 @@ create_state (rxvt_term *term, const char *dir, char **plugins)
   lua_setfield (L, -2, "__gc");
   lua_pop (L, 1);
 
-  // the global urxvt module, also available via require "urxvt"
-  luaL_register (L, "urxvt", urxvt_functions);
+  // Expose only the implicit global; plugins do not need a module import.
+  lua_newtable (L);
+  luaL_register (L, 0, urxvt_functions);
+  lua_pushvalue (L, -1);
+  lua_setglobal (L, "nrxvt");
   lua_pushstring (L, VERSION);
   lua_setfield (L, -2, "version");
   lua_pushstring (L, dir);
@@ -2368,7 +2371,7 @@ create_state (rxvt_term *term, const char *dir, char **plugins)
   rxvt_lua.L = L;
 
   // the terminal is not usable before its lua object exists, which needs
-  // the state, but keysym parsing in urxvt.bind already works
+  // the state, but keysym parsing in nrxvt.bind already works
   cur_term = term;
 
   for (char **name = plugins; *name; name++)
@@ -2450,7 +2453,7 @@ rxvt_lua_interp::init (rxvt_term *term)
 /////////////////////////////////////////////////////////////////////////////
 // hook invocation
 
-// Calls the urxvt.bind function matching a key press, if any. Returns
+// Calls the nrxvt.bind function matching a key press, if any. Returns
 // whether the key was consumed.
 static bool
 invoke_binding (lua_State *L, rxvt_term *term, XEvent *xe, KeySym sym)

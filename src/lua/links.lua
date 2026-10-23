@@ -8,8 +8,6 @@
 --
 -- Copy or link this file into ~/.config/urxvt/plugins to enable it.
 
-local urxvt = require "urxvt"
-
 local OPENER = { "xdg-open" }
 local SELECT_KEY = "M-u"
 
@@ -17,8 +15,8 @@ local SELECT_KEY = "M-u"
 local URL_PATTERN = "%f[%w](%a[%w+.-]*)://[%w%-._~:/?#%[%]@!$&'()*+,;=%%]+"
 local SCHEMES = { http = true, https = true, ftp = true, file = true }
 
-local UNDERLINE = { urxvt.style { underline = true } }
-local SELECTED = { urxvt.style { reverse = true } }
+local UNDERLINE = { nrxvt.style { underline = true } }
+local SELECTED = { nrxvt.style { reverse = true } }
 
 -- longest logical line (in rows) that is scanned, bounds the work for
 -- e.g. huge single line JSON outputs
@@ -145,7 +143,7 @@ end
 local function open (url)
   local argv = { unpack (OPENER) }
   argv[#argv + 1] = url
-  urxvt.spawn (argv)
+  nrxvt.spawn (argv)
 end
 
 local M = {}
@@ -186,7 +184,7 @@ end
 
 -- keyboard selection
 
-urxvt.bind (SELECT_KEY, function (t)
+nrxvt.bind (SELECT_KEY, function (t)
   local urls = visible_urls (t)
   if #urls == 0 then return end
 
@@ -207,7 +205,7 @@ function M.on_key_press (t, ev, keysym, str)
   local select = t.links_select
   if not select then return end
 
-  local key = urxvt.keysym_name (keysym)
+  local key = nrxvt.keysym_name (keysym)
 
   if key == "Up" or key == "k" then
     select.index = math.max (1, select.index - 1)
