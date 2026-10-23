@@ -118,7 +118,7 @@ def main():
                 # Use the resource class so overrides survive binary renames.
                 for value in (90, 0, -0.02):
                     terminal = Terminal(binary, directory, env,
-                                        resources=(f"URxvt.refreshRate: {value}",),
+                                        resources=(f"NRxvt.refreshRate: {value}",),
                                         arguments=("+refreshBatching", "-frameBuffering"))
                     try:
                         expected = 50 if value < 0 else value
@@ -129,7 +129,7 @@ def main():
                     finally:
                         terminal.close()
                 configure(144, 60)
-                terminal = Terminal(binary, directory, env, resources=("URxvt.refreshRate: 90",),
+                terminal = Terminal(binary, directory, env, resources=("NRxvt.refreshRate: 90",),
                                     arguments=("-fps", "144", "+refreshBatching", "-frameBuffering"))
                 try:
                     check_rate(terminal, 144)

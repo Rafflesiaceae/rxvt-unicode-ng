@@ -29,11 +29,11 @@
 --   q Escape C-c       quit
 --
 -- The selection goes to PRIMARY, and to the CLIPBOARD as well if the
--- URxvt.keyboard-select.clipboard resource is true. Keysym resources of
+-- NRxvt.keyboard-select.clipboard resource is true. Keysym resources of
 -- the perl extension keep working, e.g.
 --
---   URxvt.keysym.M-Escape: perl:keyboard-select:activate
---   URxvt.keysym.M-s:      perl:keyboard-select:search
+--   NRxvt.keysym.M-Escape: perl:keyboard-select:activate
+--   NRxvt.keysym.M-s:      perl:keyboard-select:search
 --
 -- Copy or link this file into ~/.config/urxvt/plugins to enable it.
 

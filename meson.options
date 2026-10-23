@@ -67,10 +67,10 @@ option('codesets', type: 'array',
 # --- names -----------------------------------------------------------------
 
 option('fallback', type: 'string', value: 'Rxvt',
-  description: 'fall back on resources of this class in addition to URxvt ones (empty to disable)')
-option('res-name', type: 'string', value: 'urxvt',
+  description: 'fall back on resources of this class in addition to the primary class (empty to disable)')
+option('res-name', type: 'string', value: 'nrxvt',
   description: 'default resource name')
-option('res-class', type: 'string', value: 'URxvt',
+option('res-class', type: 'string', value: 'NRxvt',
   description: 'resource class')
 option('name', type: 'string', value: 'nrxvt',
   description: 'basename for the installed binaries')

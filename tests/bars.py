@@ -205,7 +205,7 @@ class Terminal:
         self.process = subprocess.Popen([binary, "-pty-fd", str(self.master), "-geometry", "20x8",
             "-fn", font, "-sl", "1000", "-fg", "#ffffff", "-bg", "#000000",
             "-sb" if native else "+sb", "+bc",
-            "-xrm", "URxvt.internalBorder: 0", "-xrm", "URxvt.refreshBatching: false"],
+            "-xrm", "NRxvt.internalBorder: 0", "-xrm", "NRxvt.refreshBatching: false"],
             pass_fds=(self.master,), stderr=self.errors, stdout=subprocess.DEVNULL,
             env=dict(env, XDG_CONFIG_HOME=str(directory), LD_PRELOAD=str(directory.parent / "probe.so"),
                      URXVT_BAR_TRACE=str(self.trace), BAR_TEST_SCROLLBAR="1" if scrollbar else ""))

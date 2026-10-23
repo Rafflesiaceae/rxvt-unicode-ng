@@ -1,7 +1,7 @@
 # Manual pages.
 #
-# The *.man.in files are pregenerated from the pods and checked in, so only
-# the @@...@@ placeholders need to be filled in.
+# The *.man.in files are pregenerated from the pods and checked in. Adapt
+# resource names and fill in the @@...@@ placeholders here.
 
 sed = find_program('sed')
 
@@ -11,6 +11,9 @@ sed_args = [
   '-e', 's%@@RXVT_DATE@@%' + date + '%g',
   '-e', 's%@@RXVT_LIBDIR@@%' + libdir + '%g',
   '-e', 's%@@URXVT_NAME@@%urxvt%g',
+  # Resource examples and class names must match the configured class.
+  '-e', 's%URxvt[.]%' + get_option('res-class') + '.%g',
+  '-e', 's%fBURxvt%fB' + get_option('res-class') + '%g',
 ]
 
 # [source, installed name, section]

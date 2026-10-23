@@ -336,7 +336,7 @@ def main():
         # Seed a resource database on the otherwise empty Xvfb display so that
         # command-line -xrm overrides exercise the usual resource merge path.
         environment = directory / "Xenvironment"
-        environment.write_text("URxvt.renderingTest: true\n")
+        environment.write_text("NRxvt.renderingTest: true\n")
         subprocess.run(["cc", "-shared", "-fPIC", "-o", str(probe),
                         str(Path(__file__).with_name("render-probe.c")), "-ldl"], check=True)
         read_fd, write_fd = os.pipe()
@@ -379,20 +379,20 @@ def main():
                 try:
                     # Batching is on by default; the baseline checks cover the
                     # unbatched path explicitly.
-                    unbatched = "URxvt.refreshBatching: false"
+                    unbatched = "NRxvt.refreshBatching: false"
                     for buffered in (True, False):
                         terminal = Terminal(binary, directory, env,
                             "xft:Liberation Mono:size=11", resources=(
-                                "URxvt.frameBuffering: true", "URxvt.lineSpace: 0",
-                                unbatched, f"URxvt.buffered: {str(buffered).lower()}"))
+                                "NRxvt.frameBuffering: true", "NRxvt.lineSpace: 0",
+                                unbatched, f"NRxvt.buffered: {str(buffered).lower()}"))
                         try:
                             check_glyph_overflow(terminal, xlib, display)
                         finally:
                             terminal.close()
                     print("PASS: tall Xft glyphs stay within their row and erase cleanly")
                     variants = (("fixed", (unbatched,)), ("xft:monospace:size=11", (unbatched,)),
-                                ("xft:monospace:size=11", (unbatched, "URxvt.depth: 32",
-                                 "URxvt.background: [50]black", "URxvt.foreground: [80]white")))
+                                ("xft:monospace:size=11", (unbatched, "NRxvt.depth: 32",
+                                 "NRxvt.background: [50]black", "NRxvt.foreground: [80]white")))
                     for font, resources in variants:
                         terminal = Terminal(binary, directory, env, font, resources)
                         try:
@@ -403,7 +403,7 @@ def main():
                         print(f"PASS: frame presentation, expose and resize ({font})")
                         print(f"PASS: synchronized output, queries, watchdog and reset ({font})")
                     terminal = Terminal(binary, directory, env, resources=(
-                        "URxvt.refreshBatching: true", "URxvt.refreshRate: 0"))
+                        "NRxvt.refreshBatching: true", "NRxvt.refreshRate: 0"))
                     try:
                         check_batching(terminal)
                         check_synchronized(terminal, xlib, display)
@@ -411,7 +411,7 @@ def main():
                         terminal.close()
                     print("PASS: bounded batching and synchronized output with batching enabled")
                     terminal = Terminal(binary, directory, env, resources=(
-                        "URxvt.refreshBatching: true", "URxvt.refreshRate: 20"))
+                        "NRxvt.refreshBatching: true", "NRxvt.refreshRate: 20"))
                     try:
                         check_frame_rate(terminal)
                     finally:
@@ -420,7 +420,7 @@ def main():
 
                     # Exercise all three startup switches independently.
                     for frame, synchronized, batching in itertools.product((False, True), repeat=3):
-                        resources = tuple(f"URxvt.{name}: {str(value).lower()}" for name, value in (
+                        resources = tuple(f"NRxvt.{name}: {str(value).lower()}" for name, value in (
                             ("frameBuffering", frame), ("synchronizedOutput", synchronized),
                             ("refreshBatching", batching)))
                         terminal = Terminal(binary, directory, env, resources=resources)
@@ -432,8 +432,8 @@ def main():
 
                     for font, buffered in (("fixed", True), ("xft:monospace:size=11", True),
                                            ("xft:monospace:size=11", False)):
-                        resources = ("URxvt.frameBuffering: false",
-                                     f"URxvt.buffered: {str(buffered).lower()}")
+                        resources = ("NRxvt.frameBuffering: false",
+                                     f"NRxvt.buffered: {str(buffered).lower()}")
                         terminal = Terminal(binary, directory, env, font, resources)
                         try:
                             check_direct_drawing(terminal, xlib, display)
@@ -442,7 +442,7 @@ def main():
                     print("PASS: direct drawing, expose, resize, synchronization and Xft buffering")
 
                     terminal = Terminal(binary, directory, env, "xft:monospace:size=11",
-                                        ("URxvt.buffered: false",))
+                                        ("NRxvt.buffered: false",))
                     try:
                         check_frames(terminal, xlib, display)
                     finally:

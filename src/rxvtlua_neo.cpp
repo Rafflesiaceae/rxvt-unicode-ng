@@ -1467,7 +1467,7 @@ rxvt_lua_interp::selection_finish (rxvt_selection *sel, char *data, unsigned int
   lua_settop (L, base);
 }
 
-// t:resource (name) -> value of the X resource URxvt.<name>, or nil
+// t:resource (name) -> value of the X resource for the configured name/class, or nil
 static int
 t_resource (lua_State *L)
 {
