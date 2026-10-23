@@ -587,7 +587,6 @@ rxvt_term::init_vars ()
 
   oldcursor.row = oldcursor.col = -1;
 
-  set_option (Opt_scrollBar);
   // Keep scrollback stable on output and return to the bottom on typing.
   set_option (Opt_scrollWithBuffer);
   set_option (Opt_scrollTtyKeypress);

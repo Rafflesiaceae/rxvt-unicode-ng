@@ -31,11 +31,11 @@ option('iso14755', type: 'boolean', value: false,
   description: 'extended ISO 14755 modes')
 option('8bitctrls', type: 'boolean', value: false,
   description: '8 bit control sequences (not recommended)')
-option('rxvt-scroll', type: 'boolean', value: true,
+option('rxvt-scroll', type: 'boolean', value: false,
   description: 'rxvt style scrollbar')
-option('next-scroll', type: 'boolean', value: true,
+option('next-scroll', type: 'boolean', value: false,
   description: 'NeXT style scrollbar')
-option('xterm-scroll', type: 'boolean', value: true,
+option('xterm-scroll', type: 'boolean', value: false,
   description: 'xterm style scrollbar')
 option('keepscrolling', type: 'boolean', value: true,
   description: 'continual scrolling on scrollbar arrow press')
