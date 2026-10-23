@@ -50,7 +50,7 @@ for arbitrary extension resources; these are visible to `t:resource` and
 Configuration and plugins are loaded once per interpreter. Startup option
 assignments are allowed during that load; later writes raise an error.
 Live reconfiguration is not provided by this interface. Bind callbacks
-with `nrxvt.bind`, and optionally return a table of hooks from `init.lua`,
+with `nrxvt.bind` and register hooks with `nrxvt.on_*` from `init.lua`,
 just as a plugin does. Helper modules can live in `nrxvt/lua/?.lua` or
 `nrxvt/lua/?/init.lua` below the configuration directory and be loaded with
 `require`.
@@ -80,25 +80,35 @@ their settings (keys, opener, ...) at the top of the files.
 ## Writing plugins
 
 The implicit `nrxvt` global is available before plugins are loaded. No
-`require` call is needed. A plugin returns a table of hook functions:
+`require` call is needed. Register callbacks with the `nrxvt.on_*` functions:
 
 ```lua
-local M = {}
-
-function M.on_start (t)
+nrxvt.on_start (function (t)
   nrxvt.warn ("terminal with " .. t:nrow () .. " rows started")
-end
+end)
 
 -- typing "!" rings the bell instead of sending it
-function M.on_key_press (t, ev, keysym, str)
+nrxvt.on_key_press (function (t, ev, keysym, str)
   if str == "!" then
     t:feed ("\a")
     return true
   end
-end
-
-return M
+end)
 ```
+
+Each registration appends a callback. Callbacks run in file loading order,
+then registration order within each file. Register existing functions
+directly, e.g. `nrxvt.on_refresh_begin (sync)`. Registration is allowed only
+while loading `init.lua`, plugins, and their required modules, before any
+terminal hooks run. The registrations apply to every terminal using the
+interpreter; keep per-terminal state on `t` rather than in shared locals.
+
+If a file fails to load, its hook registrations are discarded. An
+`init.lua` failure aborts startup; a plugin failure is reported and loading
+continues with the next file. Returned hook tables are no longer supported:
+startup files must return no value (or `nil`), otherwise their hook
+registrations are discarded and an error is reported. Helper modules loaded
+with `require` can still return values as usual.
 
 Hooks are called with the terminal object `t` followed by the hook
 arguments. If a hook returns a true value, the event counts as consumed:
@@ -253,7 +263,7 @@ status:show ()
 Bars reserve pixels outside the text viewport. Create them in `on_init` so their reservations are included in initial character geometry. Runtime creation or closure keeps the current outer window size and adjusts text rows/columns as necessary on the next scheduled frame. Hidden bars keep their reservation and show terminal background. Bars remain registered even if their Lua references are garbage collected; `close` explicitly releases the reservation. All bars close when their terminal is destroyed.
 
 ```lua
-function M.on_init(t)
+nrxvt.on_init(function (t)
   -- Horizontal bars own corners; nested parts inherit the bar's flow axis.
   t.status_bar = t:new_bar {
     edge = "bottom", thickness = 24, priority = 0,
@@ -271,7 +281,7 @@ function M.on_init(t)
       { id = "position", size = { ratio = 1 }, text = "Ready" },
     },
   }
-end
+end)
 ```
 
 `edge`, `thickness`, and `priority` are required and fixed for the bar's lifetime. Edges are `"top"`, `"bottom"`, `"left"`, and `"right"`. Thickness is an integer from 1 through 32767 pixels; total reservations must fit X11 geometry limits. Priority is a signed 32-bit integer: smaller numbers are closer to the outside, with creation order breaking ties. `visible` is an optional boolean, defaulting to true; `on_event` is an optional function. Top/bottom bars span the client width and own the corners. Left/right bars occupy the height between them. The independent native scrollbar, if enabled, occupies its own gutter between the corresponding side's bars and the text viewport.
@@ -348,6 +358,7 @@ and styling plugins do not overwrite them.
 
 | function | description |
 |---|---|
+| `nrxvt.on_*(fn)` | appends `fn (t, ...)` to the corresponding hook listed above, e.g. `nrxvt.on_start (fn)`; registration is limited to startup |
 | `nrxvt.bind (key, fn)` | calls `fn (t)` when `key` is pressed, using the keysym resource syntax (e.g. `"M-s"`, `"C-S-Up"`). The key is consumed unless `fn` returns `false`. As with keysym resources, extra modifiers are ignored. |
 | `nrxvt.style {fg=, bg=, bold=, italic=, underline=, reverse=, blink=}` | returns `and_mask, or_mask`. Colors are indices (0-15 for the basic colors) or `"default"`. Attributes set to `true` are added, set to `false` are removed, and omitted ones are left alone. |
 | `nrxvt.timer (after, fn [, repeat])` | calls `fn ()` after `after` seconds, then every `repeat` seconds. Returns a timer with `:start ([after [, repeat]])` and `:stop ()`. Active timers don't need to be referenced, and they never keep urxvt running. |

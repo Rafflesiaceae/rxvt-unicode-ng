@@ -146,11 +146,9 @@ local function open (url)
   nrxvt.spawn (argv)
 end
 
-local M = {}
-
 -- underline the URLs of every line that changed, this runs only once per
 -- change of a line, not on every refresh
-function M.on_line_update (t, row)
+nrxvt.on_line_update (function (t, row)
   local text, segments = logical_line (t, row)
   if not text:find ("://", 1, true) then return end
 
@@ -159,9 +157,9 @@ function M.on_line_update (t, row)
       t:rend (r, c0, c1, unpack (UNDERLINE))
     end)
   end
-end
+end)
 
-function M.on_button_press (t, ev)
+nrxvt.on_button_press (function (t, ev)
   if ev.button == 1 and ev.ctrl then
     local url = url_at (t, ev.row, ev.col)
     if url then
@@ -169,9 +167,9 @@ function M.on_button_press (t, ev)
       return true
     end
   end
-end
+end)
 
-function M.on_button_release (t, ev)
+nrxvt.on_button_release (function (t, ev)
   if ev.button == 1 and t.links_pressed then
     -- only open if the release happened on the same URL
     if url_at (t, ev.row, ev.col) == t.links_pressed then
@@ -180,7 +178,7 @@ function M.on_button_release (t, ev)
     t.links_pressed = nil
     return true
   end
-end
+end)
 
 -- keyboard selection
 
@@ -192,16 +190,16 @@ nrxvt.bind (SELECT_KEY, function (t)
   t:refresh ()
 end)
 
-function M.on_refresh_begin (t)
+nrxvt.on_refresh_begin (function (t)
   local select = t.links_select
   if select then
     for _, part in ipairs (select.urls[select.index].parts) do
       t:highlight (part[1], part[2], part[3], unpack (SELECTED))
     end
   end
-end
+end)
 
-function M.on_key_press (t, ev, keysym, str)
+nrxvt.on_key_press (function (t, ev, keysym, str)
   local select = t.links_select
   if not select then return end
 
@@ -224,11 +222,9 @@ function M.on_key_press (t, ev, keysym, str)
   -- every key is consumed while selecting
   t:refresh ()
   return true
-end
+end)
 
 -- the view moved, the selected URLs might not be on screen anymore
-function M.on_view_change (t)
+nrxvt.on_view_change (function (t)
   t.links_select = nil
-end
-
-return M
+end)

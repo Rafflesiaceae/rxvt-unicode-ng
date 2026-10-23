@@ -28,7 +28,6 @@ def wait_for(predicate, timeout=3):
 
 
 CONTROLLER = r'''
-local M = {}
 local function reply(t, s) t:write("BAR:" .. s .. "\n") end
 local function input(t, bar, ev)
   if ev.type == "resize" then return end
@@ -42,7 +41,7 @@ local function input(t, bar, ev)
     end
   end
 end
-function M.on_init(t)
+nrxvt.on_init(function (t)
   t.test_bars = {}
   if os.getenv("BAR_TEST_SCROLLBAR") == "1" then return end
   local function add(name, edge, thickness, priority)
@@ -63,8 +62,8 @@ function M.on_init(t)
     {id="last", size={ratio=3}, bg=4, text="B"},
   }}
   t.test_bars.top:submit(t.test_tree)
-end
-function M.on_osc_seq(t, op, args)
+end)
+nrxvt.on_osc_seq(function (t, op, args)
   if op ~= 777 then return end
   local cmd, name = args:match("^(%S+)%s*(.*)$")
   local b = t.test_bars[name]
@@ -136,8 +135,7 @@ function M.on_osc_seq(t, op, args)
     reply(t, string.format("benchmark %d %.6f %.6f",count,unchanged,os.clock()-start))
   end
   return true
-end
-return M
+end)
 '''
 
 

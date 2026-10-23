@@ -3,7 +3,7 @@
  *----------------------------------------------------------------------*
  *
  * Loads $XDG_CONFIG_HOME/nrxvt/init.lua and the *.lua plugins below
- * nrxvt/plugins (default ~/.config/nrxvt). Plugins return hook functions
+ * nrxvt/plugins (default ~/.config/nrxvt). Plugins register hook functions
  * called with a terminal object and hook arguments. See doc/lua-plugins.md.
  *
  * With neither configuration nor plugins no Lua state is created. Hooks
@@ -44,6 +44,9 @@ static char hook_names[HOOK_NUM][32];
 
 // registry references
 static int hook_refs[HOOK_NUM]; // array of handler functions per hook, 0 if none
+// Startup-only counts allow failed files to roll back their registrations
+// without adding bookkeeping to hook dispatch.
+static int hook_counts[HOOK_NUM];
 static int term_mt_ref;         // metatable of terminal objects
 static int traceback_ref;       // debug.traceback
 
@@ -1559,6 +1562,29 @@ static const luaL_Reg term_methods[] = {
 /////////////////////////////////////////////////////////////////////////////
 // nrxvt global
 
+// Each nrxvt.on_* closure captures its hook ID once. Store callbacks directly
+// in the dispatcher's arrays; only loading and rollback use hook_counts.
+static int
+u_on (lua_State *L)
+{
+  if (!config_loading)
+    return luaL_error (L, "hooks can only be registered during startup");
+
+  luaL_checktype (L, 1, LUA_TFUNCTION);
+  int htype = lua_tointeger (L, lua_upvalueindex (1));
+
+  if (!hook_refs[htype])
+    {
+      lua_newtable (L);
+      hook_refs[htype] = luaL_ref (L, LUA_REGISTRYINDEX);
+    }
+
+  lua_rawgeti (L, LUA_REGISTRYINDEX, hook_refs[htype]);
+  lua_pushvalue (L, 1);
+  lua_rawseti (L, -2, ++hook_counts[htype]);
+  return 0;
+}
+
 // nrxvt.bind (keyspec, fn) - calls fn (t) when keyspec (keysym resource
 // syntax, e.g. "M-s" or "C-S-Up") is pressed. The key is consumed unless fn
 // returns false. Like keysym resources, extra modifiers are ignored.
@@ -2358,49 +2384,58 @@ find_plugins (const char *dir)
   return result;
 }
 
-// Registers the hook functions of the plugin table at the top of the stack.
-static void
-register_hooks (lua_State *L, const char *name)
+// Registrations become active only after the whole file succeeds. On failure,
+// remove its appended callbacks so earlier plugins keep their original arrays.
+static bool
+load_hooks (lua_State *L, const char *path, const char *name)
 {
+  if (luaL_loadfile (L, path))
+    {
+      rxvt_warn ("lua: %s\n", lua_tostring (L, -1));
+      lua_pop (L, 1);
+      return false;
+    }
+
+  int previous_counts[HOOK_NUM];
+  memcpy (previous_counts, hook_counts, sizeof (previous_counts));
+  bool ok = pcall (L, 0, 1, name);
+
+  if (ok)
+    {
+      if (!lua_isnil (L, -1))
+        {
+          rxvt_warn ("lua: %s: register hooks with nrxvt.on_* instead of returning a value.\n", name);
+          ok = false;
+        }
+
+      lua_pop (L, 1);
+    }
+
   for (int htype = 0; htype < HOOK_NUM; htype++)
-    {
-      lua_getfield (L, -1, hook_names[htype]);
+    if (hook_counts[htype] != previous_counts[htype])
+      {
+        if (ok)
+          {
+            rxvt_lua.should_invoke[htype] = 1;
+            continue;
+          }
 
-      if (lua_isfunction (L, -1))
-        {
-          if (!hook_refs[htype])
-            {
-              lua_newtable (L);
-              hook_refs[htype] = luaL_ref (L, LUA_REGISTRYINDEX);
-            }
+        lua_rawgeti (L, LUA_REGISTRYINDEX, hook_refs[htype]);
+        while (hook_counts[htype] > previous_counts[htype])
+          {
+            lua_pushnil (L);
+            lua_rawseti (L, -2, hook_counts[htype]--);
+          }
+        lua_pop (L, 1);
 
-          lua_rawgeti (L, LUA_REGISTRYINDEX, hook_refs[htype]);
-          lua_insert (L, -2);
-          lua_rawseti (L, -2, lua_objlen (L, -2) + 1);
-          rxvt_lua.should_invoke[htype] = 1;
-        }
+        if (!hook_counts[htype])
+          {
+            luaL_unref (L, LUA_REGISTRYINDEX, hook_refs[htype]);
+            hook_refs[htype] = 0;
+          }
+      }
 
-      lua_pop (L, 1);
-    }
-
-  // all other fields starting with on_ are most likely typos
-  lua_pushnil (L);
-  while (lua_next (L, -2))
-    {
-      if (lua_type (L, -2) == LUA_TSTRING)
-        {
-          const char *key = lua_tostring (L, -2);
-          bool known = strncmp (key, "on_", 3);
-
-          for (int htype = 0; !known && htype < HOOK_NUM; htype++)
-            known = !strcmp (key, hook_names[htype]);
-
-          if (!known)
-            rxvt_warn ("lua: %s: unknown hook '%s', ignoring.\n", name, key);
-        }
-
-      lua_pop (L, 1);
-    }
+  return ok;
 }
 
 static void
@@ -2468,6 +2503,12 @@ create_state (rxvt_term *term, const char *config, const char *dir, const char *
   // Expose only the implicit global; plugins do not need a module import.
   lua_newtable (L);
   luaL_register (L, 0, urxvt_functions);
+  for (int htype = 0; htype < HOOK_NUM; htype++)
+    {
+      lua_pushinteger (L, htype);
+      lua_pushcclosure (L, u_on, 1);
+      lua_setfield (L, -2, hook_names[htype]);
+    }
   lua_pushvalue (L, -1);
   lua_setglobal (L, "nrxvt");
   register_config (L, "opt", config_options_ref, true);
@@ -2513,38 +2554,15 @@ create_state (rxvt_term *term, const char *config, const char *dir, const char *
   cur_term = term;
   config_loading = true;
 
-  if (init)
-    {
-      if (luaL_loadfile (L, init))
-        rxvt_fatal ("lua: %s\n", lua_tostring (L, -1));
-      if (!pcall (L, 0, 1, init))
-        rxvt_fatal ("lua: init.lua failed, aborting.\n");
-      if (lua_istable (L, -1))
-        register_hooks (L, "init.lua");
-      lua_pop (L, 1);
-    }
+  if (init && !load_hooks (L, init, "init.lua"))
+    rxvt_fatal ("lua: init.lua failed, aborting.\n");
 
   for (char **name = plugins; name && *name; name++)
     {
       char path[PATH_MAX];
       snprintf (path, sizeof (path), "%s/%s", dir, *name);
 
-      if (luaL_loadfile (L, path))
-        {
-          rxvt_warn ("lua: %s\n", lua_tostring (L, -1));
-          lua_pop (L, 1);
-          continue;
-        }
-
-      if (!pcall (L, 0, 1, *name))
-        continue;
-
-      if (lua_istable (L, -1))
-        register_hooks (L, *name);
-      else if (!lua_isnil (L, -1))
-        rxvt_warn ("lua: %s: plugins have to return a table of hooks (or nothing).\n", *name);
-
-      lua_pop (L, 1);
+      load_hooks (L, path, *name);
     }
 
   config_loading = false;

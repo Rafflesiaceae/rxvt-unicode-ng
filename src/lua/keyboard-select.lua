@@ -743,25 +743,23 @@ if SEARCH_KEY then
   end)
 end
 
-local M = {}
-
 -- the commands of the perl extension, for keysym resources
 local COMMANDS = { activate = false, search = true }
 
-function M.on_user_command (t, cmd)
+nrxvt.on_user_command (function (t, cmd)
   local search = COMMANDS[cmd:match ("^keyboard%-select:(.*)$")]
   if search == nil then return end
   if not t.keyboard_select then activate (t, search) end
   return true
-end
+end)
 
-function M.on_action (t, ext, action)
+nrxvt.on_action (function (t, ext, action)
   if ext ~= "keyboard-select" or COMMANDS[action] == nil then return end
   if not t.keyboard_select then activate (t, COMMANDS[action]) end
   return true
-end
+end)
 
-function M.on_key_press (t, ev, keysym, str)
+nrxvt.on_key_press (function (t, ev, keysym, str)
   local ks = t.keyboard_select
   if not ks then return end
 
@@ -769,16 +767,16 @@ function M.on_key_press (t, ev, keysym, str)
 
   -- every key is consumed while selecting
   return true
-end
+end)
 
 -- nothing is sent to the program while selecting, a write that has to
 -- wait for the pty would also resume its output
-function M.on_tt_write (t)
+nrxvt.on_tt_write (function (t)
   return t.keyboard_select ~= nil
-end
+end)
 
 -- draws the selection, the highlight is undone after the refresh
-function M.on_refresh_begin (t)
+nrxvt.on_refresh_begin (function (t)
   local ks = t.keyboard_select
   if not ks or ks.select == "" then return end
 
@@ -818,6 +816,4 @@ function M.on_refresh_begin (t)
   if reverse_cursor then
     t:xor_span (cr, cc, cr, cc + 1, hl)
   end
-end
-
-return M
+end)

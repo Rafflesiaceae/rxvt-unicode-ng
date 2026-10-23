@@ -159,9 +159,7 @@ nrxvt.bind (SEARCH_KEY, function (t)
   t:refresh ()
 end)
 
-local M = {}
-
-function M.on_key_press (t, ev, keysym, str)
+nrxvt.on_key_press (function (t, ev, keysym, str)
   local search = t.search
   if not search then return end
 
@@ -186,10 +184,10 @@ function M.on_key_press (t, ev, keysym, str)
 
   -- every key is consumed while searching
   return true
-end
+end)
 
 -- highlights the matches on screen
-function M.on_refresh_begin (t)
+nrxvt.on_refresh_begin (function (t)
   local search = t.search
   if not search or search.query == "" then return end
 
@@ -202,15 +200,13 @@ function M.on_refresh_begin (t)
       t:highlight (row, t:col (row, s), t:col (row, e + 1), unpack (style))
     end
   end
-end
+end)
 
 -- the screen size changed, the prompt has to be recreated
-function M.on_size_change (t)
+nrxvt.on_size_change (function (t)
   local search = t.search
   if search then
     t:overlay (0, -1, t:ncol () - 2, 1)
     draw_prompt (t, search)
   end
-end
-
-return M
+end)

@@ -4,7 +4,6 @@ local MIN_HANDLE = 20
 local WHEEL_LINES = 3
 local PRIORITY = 0
 
-local M = {}
 local floor, min, max = math.floor, math.min, math.max
 
 local function round(n) return floor(n + 0.5) end
@@ -68,7 +67,7 @@ local function input(t, bar, ev)
   end
 end
 
-function M.on_init(t)
+nrxvt.on_init (function (t)
   local s = {
     tree = { bg = "background", children = {
       { id = "before", size = { px = 0 } },
@@ -79,13 +78,11 @@ function M.on_init(t)
   t.lua_scrollbar = s
   s.bar = t:new_bar { edge = "left", thickness = THICKNESS, priority = PRIORITY,
                        visible = false, on_event = input }
-end
+end)
 
 -- One tuple/geometry calculation per refresh covers resets and explicit
 -- scrollback clearing as well as ordinary output, without a polling timer.
-M.on_start = sync
-M.on_refresh_begin = sync
-M.on_screen_change = sync
-M.on_reset = sync
-
-return M
+nrxvt.on_start (sync)
+nrxvt.on_refresh_begin (sync)
+nrxvt.on_screen_change (sync)
+nrxvt.on_reset (sync)
