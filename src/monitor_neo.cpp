@@ -37,6 +37,7 @@ void
 rxvt_display::update_monitors ()
 {
   refresh_rate = 60.;
+  monitors.clear ();
   double highest = 0.;
   XRRScreenResources *resources = randr_current
     ? XRRGetScreenResourcesCurrent (dpy, root)
@@ -49,6 +50,7 @@ rxvt_display::update_monitors ()
       {
         if (crtc->mode && crtc->width && crtc->height)
           {
+            monitors.push_back ({crtc->x, crtc->y, int (crtc->width), int (crtc->height)});
             for (int j = 0; j < resources->nmode; j++)
               if (resources->modes[j].id == crtc->mode)
                 {

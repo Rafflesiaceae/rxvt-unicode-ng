@@ -563,6 +563,73 @@ t_window (lua_State *L)
   return 1;
 }
 
+// Return the decorated frame and its monitor in root coordinates. Query only
+// from window-event hooks, rather than adding X round trips to every redraw.
+static int
+t_window_geometry (lua_State *L)
+{
+  rxvt_term *term = check_term (L);
+  Window root, child;
+  int x, y, unused_x, unused_y;
+  unsigned int width, height, border, depth;
+  if (!term->parent
+      || !XGetGeometry (term->dpy, term->parent, &root, &unused_x, &unused_y,
+                        &width, &height, &border, &depth)
+      || !XTranslateCoordinates (term->dpy, term->parent, term->display->root,
+                                 0, 0, &x, &y, &child))
+    return 0;
+
+  int frame_x = x - int (border), frame_y = y - int (border);
+  int frame_width = width + 2 * border, frame_height = height + 2 * border;
+  Atom type;
+  int format;
+  unsigned long count, remaining;
+  unsigned char *data = 0;
+  // i3 advertises the actual decoration widths, including hidden edge
+  // borders. Do not guess them from a configured border thickness.
+  if (XGetWindowProperty (term->dpy, term->parent,
+                          term->display->atom ("_NET_FRAME_EXTENTS"),
+                          0, 4, False, XA_CARDINAL, &type, &format,
+                          &count, &remaining, &data) == Success
+      && type == XA_CARDINAL && format == 32 && count == 4)
+    {
+      const unsigned long *extents = (const unsigned long *)data;
+      if (extents[0] <= 65535 && extents[1] <= 65535
+          && extents[2] <= 65535 && extents[3] <= 65535)
+        {
+          frame_x = x - int (extents[0]); frame_y = y - int (extents[2]);
+          frame_width = width + extents[0] + extents[1];
+          frame_height = height + extents[2] + extents[3];
+        }
+    }
+  if (data) XFree (data);
+
+  int monitor_x = 0, monitor_y = 0;
+  int monitor_width = DisplayWidth (term->dpy, term->display->screen);
+  int monitor_height = DisplayHeight (term->dpy, term->display->screen);
+#if HAVE_XRANDR
+  // A window spanning outputs belongs to the one with the largest overlap.
+  int64_t best = 0;
+  for (const auto &monitor : term->display->monitors)
+    {
+      int w = max (0, min (frame_x + frame_width, monitor.x + monitor.width) - max (frame_x, monitor.x));
+      int h = max (0, min (frame_y + frame_height, monitor.y + monitor.height) - max (frame_y, monitor.y));
+      int64_t area = int64_t (w) * h;
+      if (area > best)
+        {
+          best = area;
+          monitor_x = monitor.x; monitor_y = monitor.y;
+          monitor_width = monitor.width; monitor_height = monitor.height;
+        }
+    }
+#endif
+  lua_pushinteger (L, frame_x); lua_pushinteger (L, frame_y);
+  lua_pushinteger (L, frame_width); lua_pushinteger (L, frame_height);
+  lua_pushinteger (L, monitor_x); lua_pushinteger (L, monitor_y);
+  lua_pushinteger (L, monitor_width); lua_pushinteger (L, monitor_height);
+  return 8;
+}
+
 // t:line (row) -> text, wrapped
 // The UTF-8 text of a row, wrapped tells whether the line continues on the
 // next row. Each column contributes its character, the second column of
@@ -1526,6 +1593,7 @@ static const luaL_Reg term_methods[] = {
   { "focus",         t_focus         },
   { "font_size",     t_font_size     },
   { "window",        t_window        },
+  { "window_geometry", t_window_geometry },
   { "line",          t_line          },
   { "col",           t_col           },
   { "line_bounds",   t_line_bounds   },

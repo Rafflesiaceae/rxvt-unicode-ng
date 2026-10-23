@@ -260,6 +260,9 @@ struct rxvt_display : refcounted
 #if HAVE_XRANDR
   // Share the highest active display rate across terminals on this screen.
   double refresh_rate;
+  // Reuse the active CRTC rectangles for monitor-relative plugin geometry.
+  struct monitor_geometry { int x, y, width, height; };
+  vector<monitor_geometry> monitors;
   int randr_event_base;
   bool randr_current;
   // Keep cache initialization and event handling with mode discovery.

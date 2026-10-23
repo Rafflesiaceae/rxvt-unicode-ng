@@ -1,4 +1,4 @@
--- A reserved left scrollbar built entirely from the public bar API.
+-- A reserved scrollbar anchored toward the nearest horizontal monitor edge.
 local THICKNESS = 4
 local MIN_HANDLE = 20
 local WHEEL_LINES = 3
@@ -67,8 +67,31 @@ local function input(t, bar, ev)
   end
 end
 
+local function new_bar(t, edge)
+  return t:new_bar { edge = edge, thickness = THICKNESS, priority = PRIORITY,
+                     visible = false, on_event = input }
+end
+
+local function anchor(t)
+  local s = t.lua_scrollbar
+  if not s then return end
+  local x, _, width, _, monitor_x, _, monitor_width = t:window_geometry()
+  if not x then return end
+  -- Compare decorated frame centers, so i3 borders and monitor offsets do
+  -- not bias placement. Centered and full-width windows keep the left bar.
+  local edge = 2 * x + width > 2 * monitor_x + monitor_width and "right" or "left"
+  if edge == s.edge then return end
+  -- Edge reservations are immutable. Replace the bar before the deferred
+  -- geometry pass, keeping the total reserved width and text grid unchanged.
+  s.bar:close()
+  s.edge, s.bar = edge, new_bar(t, edge)
+  s.last_start, s.last_handle, s.last_length = nil, nil, nil
+  sync(t)
+end
+
 nrxvt.on_init (function (t)
   local s = {
+    edge = "left",
     tree = { bg = "background", children = {
       { id = "before", size = { px = 0 } },
       { id = "handle", size = { px = 0 }, bg = "foreground" },
@@ -76,8 +99,16 @@ nrxvt.on_init (function (t)
     } },
   }
   t.lua_scrollbar = s
-  s.bar = t:new_bar { edge = "left", thickness = THICKNESS, priority = PRIORITY,
-                       visible = false, on_event = input }
+  s.bar = new_bar(t, s.edge)
+end)
+
+-- Placement queries run on window events, never on the output refresh path.
+-- Property changes include i3 updating its frame extents after border changes.
+nrxvt.on_start (anchor)
+nrxvt.on_configure_notify (anchor)
+nrxvt.on_map_notify (anchor)
+nrxvt.on_property_notify (function (t, ev)
+  if ev.window == t:window() then anchor(t) end
 end)
 
 -- One tuple/geometry calculation per refresh covers resets and explicit

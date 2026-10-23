@@ -1502,6 +1502,10 @@ rxvt_term::create_windows (int argc, const char *const *argv)
                 | KeyReleaseMask
 #endif
                 | FocusChangeMask | VisibilityChangeMask
+#if ENABLE_LUA
+                // WM decorations are properties of the toplevel window.
+                | (SHOULD_INVOKE (HOOK_PROPERTY_NOTIFY) ? PropertyChangeMask : 0)
+#endif
                 | ExposureMask | StructureNotifyMask);
 
   termwin_ev.start (display, top);

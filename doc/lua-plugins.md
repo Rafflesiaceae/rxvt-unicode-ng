@@ -72,10 +72,12 @@ Four example plugins are installed to `share/nrxvt/lua` (see `src/lua/`):
 - `links.lua` underlines URLs, opens them with Ctrl + click and lets you
   select them from the keyboard (`M-u`)
 - `search.lua` searches incrementally through the whole scrollback (`M-s`)
-- `scrollbar.lua` provides a 4px left scrollbar with a draggable proportional handle
+- `scrollbar.lua` provides a 4px scrollbar with a draggable proportional handle, anchored left or right according to the window's position on its monitor
 
 Enable them by copying or linking them into the plugin directory, and change
 their settings (keys, opener, ...) at the top of the files.
+
+The scrollbar compares the decorated window's center with its monitor's center, including i3's advertised border extents. Windows to the right get a right scrollbar; left and centered windows keep a left scrollbar. Placement updates on moves, resizes, mapping, and window property changes. This detects monitor-relative position, not the window's ancestry in a nested i3 split. With multiple monitors it uses the active RandR CRTC with the largest frame overlap; without RandR it uses the whole X screen.
 
 ## Writing plugins
 
@@ -198,6 +200,7 @@ arguments are listed after `t`. X events (`ev`) are tables with `type`,
 | `t:focus ()` | whether the window has the focus |
 | `t:font_size ()` | `width, height` of a character cell in pixels |
 | `t:window ()` | X window id |
+| `t:window_geometry ()` | `x, y, width, height, monitor_x, monitor_y, monitor_width, monitor_height` in root pixels, or no values before the window exists. The frame includes WM decorations from `_NET_FRAME_EXTENTS` (otherwise the X border). The monitor is the active RandR CRTC with the greatest frame overlap, falling back to the X screen. This queries X; use it in window-event hooks rather than refresh hooks. |
 | `t:line (row)` | `text, wrapped`, where `wrapped` tells whether the line continues on the next row |
 | `t:col (row, byte)` | column of the character at a 1-based byte offset of `t:line (row)` |
 | `t:line_bounds (row)` | `beg, end, len` of the logical line that `row` is part of (it may be wrapped over several rows), `len` in cells. Offsets into it are `(row - beg) * t:ncol () + col`, like perl's line objects |
