@@ -239,7 +239,12 @@ foreach h : [
   'sys/timerfd.h', 'sys/select.h', 'sys/eventfd.h', 'sys/signalfd.h',
   'linux/aio_abi.h', 'linux/fs.h',
 ]
-  have_header = cpp.has_header(h)
+  # Only probe kqueue and Solaris event-port headers on non-Linux hosts.
+  if host_machine.system() == 'linux' and h in ['sys/event.h', 'port.h']
+    have_header = false
+  else
+    have_header = cpp.has_header(h)
+  endif
   libev_headers += {h: have_header}
   cdata.set('HAVE_' + h.underscorify().to_upper(), have_header ? 1 : false)
 endforeach
