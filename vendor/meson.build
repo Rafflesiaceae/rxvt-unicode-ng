@@ -1,4 +1,4 @@
-# --- libptytty (port of libptytty/CMakeLists.txt) -----------------------------
+# --- VENDOR - libptytty (port of libptytty/CMakeLists.txt) --------------------
 
 # Keep libptytty's configuration separate from the terminal's config.h.
 ptytty_cdata = configuration_data()
@@ -16,16 +16,22 @@ if host_machine.system() == 'sunos'
   ptytty_prefix += '#define _XOPEN_SOURCE 600\n'
 endif
 
-foreach h : ['pty.h', 'util.h', 'libutil.h', 'sys/ioctl.h', 'stropts.h',
-             'utmp.h', 'utmpx.h', 'lastlog.h']
-  ptytty_cdata.set('HAVE_' + h.underscorify().to_upper(),
-    cpp.has_header(h, prefix: ptytty_prefix + '#include <sys/types.h>') ? 1 : false)
+# Match the header preference in ptytty.C and stop at the first available one.
+foreach h : ['pty.h', 'libutil.h', 'util.h']
+  have_header = cpp.has_header(h, prefix: ptytty_prefix + '#include <sys/types.h>')
+  ptytty_cdata.set('HAVE_' + h.underscorify().to_upper(), have_header ? 1 : false)
+  if have_header
+    break
+  endif
 endforeach
 
-foreach f : ['revoke', '_getpty', 'getpt', 'posix_openpt', 'isastream',
-             'setuid', 'setreuid', 'setresuid', 'updwtmp', 'updwtmpx', 'updlastlogx']
-  ptytty_cdata.set('HAVE_' + f.to_upper(),
-    cpp.has_function(f, prefix: ptytty_prefix) ? 1 : false)
+foreach h : ['sys/ioctl.h', 'stropts.h']
+  have_header = cpp.has_header(h, prefix: ptytty_prefix + '#include <sys/types.h>')
+  ptytty_cdata.set('HAVE_' + h.underscorify().to_upper(), have_header ? 1 : false)
+  if h == 'stropts.h' and have_header
+    ptytty_cdata.set('HAVE_ISASTREAM',
+      cpp.has_function('isastream', prefix: ptytty_prefix) ? 1 : false)
+  endif
 endforeach
 
 unix98_pty = cpp.links(ptytty_prefix + '''
@@ -33,7 +39,16 @@ unix98_pty = cpp.links(ptytty_prefix + '''
   int main () { grantpt (0); unlockpt (0); ptsname (0); }
 ''', name: 'Unix98 ptys')
 ptytty_cdata.set('UNIX98_PTY', unix98_pty ? 1 : false)
-if not unix98_pty
+if unix98_pty
+  # Unix98 allocation prefers getpt, then posix_openpt, then a device path.
+  foreach f : ['getpt', 'posix_openpt']
+    have_function = cpp.has_function(f, prefix: ptytty_prefix)
+    ptytty_cdata.set('HAVE_' + f.to_upper(), have_function ? 1 : false)
+    if have_function
+      break
+    endif
+  endforeach
+else
   # BSD systems may provide openpty in libutil rather than libc.
   have_openpty = cpp.has_function('openpty', prefix: ptytty_prefix)
   if not have_openpty
@@ -47,13 +62,36 @@ if not unix98_pty
     endif
   endif
   ptytty_cdata.set('HAVE_OPENPTY', have_openpty ? 1 : false)
+  if not have_openpty
+    have_getpty = cpp.has_function('_getpty', prefix: ptytty_prefix)
+    ptytty_cdata.set('HAVE__GETPTY', have_getpty ? 1 : false)
+    if not have_getpty
+      # Only the legacy device-scanning allocator calls revoke.
+      ptytty_cdata.set('HAVE_REVOKE',
+        cpp.has_function('revoke', prefix: ptytty_prefix) ? 1 : false)
+    endif
+  endif
 endif
 
-# Preserve session accounting support, including systems using utmpx.
+# Match the privilege-dropping #if/#elif chain in proxy.C.
+foreach f : ['setresuid', 'setreuid', 'setuid']
+  have_function = cpp.has_function(f, prefix: ptytty_prefix)
+  ptytty_cdata.set('HAVE_' + f.to_upper(), have_function ? 1 : false)
+  if have_function
+    break
+  endif
+endforeach
+
+# Match ptytty.h: prefer utmpx except on glibc, which requires utmp.
 ptytty_cdata.set('UTMP_SUPPORT', 1)
 ptytty_cdata.set('WTMP_SUPPORT', 1)
 ptytty_cdata.set('LASTLOG_SUPPORT', 1)
-foreach record : ['utmp', 'utmpx']
+ptytty_records = ['utmpx', 'utmp']
+if cpp.has_define('__GLIBC__', prefix: ptytty_prefix + '#include <sys/types.h>')
+  ptytty_records = ['utmp']
+endif
+ptytty_log_files = []
+foreach record : ptytty_records
   record_prefix = ptytty_prefix + '#include <sys/types.h>\n#include <' + record + '.h>'
   have_record = cpp.has_type('struct ' + record, prefix: record_prefix)
   ptytty_cdata.set('HAVE_STRUCT_' + record.to_upper(), have_record ? 1 : false)
@@ -63,13 +101,31 @@ foreach record : ['utmp', 'utmpx']
     if record == 'utmp'
       ptytty_cdata.set('HAVE_UTMP_PID',
         cpp.has_member('struct utmp', 'ut_pid', prefix: record_prefix) ? 1 : false)
-      if cpp.has_header('lastlog.h', prefix: ptytty_prefix + '#include <sys/types.h>')
+      have_lastlog_header = cpp.has_header('lastlog.h',
+        prefix: ptytty_prefix + '#include <sys/types.h>')
+      ptytty_cdata.set('HAVE_LASTLOG_H', have_lastlog_header ? 1 : false)
+      if have_lastlog_header
         record_prefix += '\n#include <lastlog.h>'
       endif
     endif
     lastlog_type = record == 'utmp' ? 'lastlog' : 'lastlogx'
+    have_lastlog = cpp.has_type('struct ' + lastlog_type, prefix: record_prefix)
     ptytty_cdata.set('HAVE_STRUCT_' + lastlog_type.to_upper(),
-      cpp.has_type('struct ' + lastlog_type, prefix: record_prefix) ? 1 : false)
+      have_lastlog ? 1 : false)
+    if record == 'utmp'
+      ptytty_cdata.set('HAVE_UPDWTMP',
+        cpp.has_function('updwtmp', prefix: ptytty_prefix) ? 1 : false)
+      ptytty_log_files = ['UTMP', 'WTMP', 'LASTLOG']
+    else
+      ptytty_cdata.set('HAVE_UPDWTMPX',
+        cpp.has_function('updwtmpx', prefix: ptytty_prefix) ? 1 : false)
+      if have_lastlog
+        ptytty_cdata.set('HAVE_UPDLASTLOGX',
+          cpp.has_function('updlastlogx', prefix: ptytty_prefix) ? 1 : false)
+      endif
+      ptytty_log_files = ['WTMPX', 'LASTLOGX']
+    endif
+    break
   endif
 endforeach
 
@@ -82,6 +138,9 @@ if not meson.is_cross_build()
     ['WTMPX', ['/var/log/wtmpx', '/var/adm/wtmpx']],
     ['LASTLOGX', ['/var/log/lastlogx', '/var/adm/lastlogx']],
   ]
+    if entry[0] not in ptytty_log_files
+      continue
+    endif
     foreach path : entry[1]
       if fs.exists(path)
         ptytty_cdata.set_quoted('PT_' + entry[0] + '_FILE', path)
@@ -172,18 +231,31 @@ ptytty_dep = declare_dependency(
   dependencies: ptytty_deps,
 )
 
-# --- libev (port of libev/libev.m4, avoiding librt) ---------------------------
+# --- VENDOR - libev (port of libev/libev.m4, avoiding librt) ------------------
 
+libev_headers = {}
 foreach h : [
   'sys/inotify.h', 'sys/epoll.h', 'sys/event.h', 'port.h', 'poll.h',
   'sys/timerfd.h', 'sys/select.h', 'sys/eventfd.h', 'sys/signalfd.h',
   'linux/aio_abi.h', 'linux/fs.h',
 ]
-  cdata.set('HAVE_' + h.underscorify().to_upper(), cpp.has_header(h) ? 1 : false)
+  have_header = cpp.has_header(h)
+  libev_headers += {h: have_header}
+  cdata.set('HAVE_' + h.underscorify().to_upper(), have_header ? 1 : false)
 endforeach
 
-foreach f : ['inotify_init', 'epoll_ctl', 'kqueue', 'port_create', 'poll', 'select',
-             'eventfd', 'signalfd', 'nanosleep', 'unsetenv']
+# These libev paths require both the header and the corresponding function.
+foreach check : [
+  ['inotify_init', 'sys/inotify.h'], ['epoll_ctl', 'sys/epoll.h'],
+  ['kqueue', 'sys/event.h'], ['port_create', 'port.h'],
+  ['poll', 'poll.h'], ['select', 'sys/select.h'], ['signalfd', 'sys/signalfd.h'],
+]
+  cdata.set('HAVE_' + check[0].to_upper(),
+    libev_headers[check[1]] and cpp.has_function(check[0]) ? 1 : false)
+endforeach
+
+# eventfd can be used without sys/eventfd.h, using libev's own declarations.
+foreach f : ['eventfd', 'nanosleep', 'unsetenv']
   cdata.set('HAVE_' + f.to_upper(), cpp.has_function(f) ? 1 : false)
 endforeach
 
@@ -199,8 +271,10 @@ elif host_machine.system() == 'linux'
   ''', name: 'clock_gettime syscall') ? 1 : false)
 endif
 
-cdata.set('HAVE_KERNEL_RWF_T',
-  cpp.has_type('__kernel_rwf_t', prefix: '#include <linux/fs.h>') ? 1 : false)
+if libev_headers['linux/fs.h'] and libev_headers['sys/timerfd.h']
+  cdata.set('HAVE_KERNEL_RWF_T',
+    cpp.has_type('__kernel_rwf_t', prefix: '#include <linux/fs.h>') ? 1 : false)
+endif
 cdata.set('HAVE_FLOOR', cpp.has_function('floor', dependencies: libm) ? 1 : false)
 
 # libev is embedded by src/ev_cpp.cpp and uses the terminal's generated config.h.
