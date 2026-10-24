@@ -128,39 +128,9 @@ endforeach
 libm = cpp.find_library('m', required: false)
 base_deps += libm
 
-ptytty_dep = dependency('libptytty')
+# Bundled library checks and targets live alongside their upstream source trees.
+subdir('vendor')
 base_deps += ptytty_dep
-
-# --- libev (port of libev/libev.m4, avoiding librt) ---------------------------
-
-foreach h : [
-  'sys/inotify.h', 'sys/epoll.h', 'sys/event.h', 'port.h', 'poll.h',
-  'sys/timerfd.h', 'sys/select.h', 'sys/eventfd.h', 'sys/signalfd.h',
-  'linux/aio_abi.h', 'linux/fs.h',
-]
-  cdata.set('HAVE_' + h.underscorify().to_upper(), cpp.has_header(h) ? 1 : false)
-endforeach
-
-foreach f : ['inotify_init', 'epoll_ctl', 'kqueue', 'port_create', 'poll', 'select',
-             'eventfd', 'signalfd', 'nanosleep', 'unsetenv']
-  cdata.set('HAVE_' + f.to_upper(), cpp.has_function(f) ? 1 : false)
-endforeach
-
-if cpp.has_function('clock_gettime')
-  cdata.set('HAVE_CLOCK_GETTIME', 1)
-elif host_machine.system() == 'linux'
-  # On Linux, use the syscall wrapper rather than linking librt.
-  cdata.set('HAVE_CLOCK_SYSCALL', cpp.links('''
-    #include <unistd.h>
-    #include <sys/syscall.h>
-    #include <time.h>
-    int main () { struct timespec ts; return syscall (SYS_clock_gettime, CLOCK_REALTIME, &ts); }
-  ''', name: 'clock_gettime syscall') ? 1 : false)
-endif
-
-cdata.set('HAVE_KERNEL_RWF_T',
-  cpp.has_type('__kernel_rwf_t', prefix: '#include <linux/fs.h>') ? 1 : false)
-cdata.set('HAVE_FLOOR', cpp.has_function('floor', dependencies: libm) ? 1 : false)
 
 # --- headers, types and functions -------------------------------------------
 
@@ -402,7 +372,7 @@ configure_file(output: 'config.h', configuration: cdata)
 # Both config.h and vendor/libev/ are included via the include path by the libev
 # glue (ev_cpp.h), while "../config.h" from src/ resolves via the build
 # directory's src/ include path to the file generated above.
-config_inc = include_directories('.', 'vendor/libev')
+config_inc = [include_directories('.'), libev_inc]
 
 subdir('src')
 subdir('doc')
@@ -411,6 +381,7 @@ summary({
   'version': '@0@ : @1@'.format(version, date),
   'install path': prefix / bindir,
   'linker': link_language == 'c' ? 'C compiler + libsupc++' : 'C++ compiler',
+  'libptytty': get_option('ptytty-library'),
   'TERM': get_option('term') != '' ? get_option('term') : '(default)',
   'TERMINFO': get_option('terminfo') != '' ? get_option('terminfo') : '(default)',
   'resource name': get_option('res-name'),

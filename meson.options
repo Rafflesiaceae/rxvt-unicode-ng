@@ -1,5 +1,8 @@
 # --- optional dependencies -------------------------------------------------
 
+option('ptytty-library', type: 'combo', choices: ['static', 'shared'], value: 'static',
+  description: 'linkage of the bundled libptytty')
+
 option('xft', type: 'feature', value: 'auto',
   description: 'Xft (anti-aliased) font support')
 option('pixbuf', type: 'feature', value: 'auto',
