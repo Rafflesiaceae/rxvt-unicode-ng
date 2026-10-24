@@ -134,9 +134,17 @@ base_deps += ptytty_dep
 
 # --- headers, types and functions -------------------------------------------
 
-foreach h : ['sys/byteorder.h', 'sys/ioctl.h', 'sys/sockio.h', 'sys/strredir.h',
-             'stdint.h', 'wchar.h']
+foreach h : ['sys/ioctl.h', 'sys/strredir.h', 'stdint.h', 'wchar.h']
   cdata.set('HAVE_' + h.underscorify().to_upper(), cpp.has_header(h) ? 1 : false)
+endforeach
+
+# These compatibility headers are only used by non-Linux display-IP rewriting.
+foreach h : ['sys/byteorder.h', 'sys/sockio.h']
+  have_header = false
+  if host_machine.system() != 'linux' and get_option('display-is-ip')
+    have_header = cpp.has_header(h)
+  endif
+  cdata.set('HAVE_' + h.underscorify().to_upper(), have_header ? 1 : false)
 endforeach
 
 # Fallbacks for (very) old systems lacking these typedefs.
