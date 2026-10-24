@@ -16,6 +16,8 @@ option('lua', type: 'feature', value: 'auto',
 
 option('xim', type: 'boolean', value: true,
   description: 'XIM (X Input Method) protocol support')
+option('display-is-ip', type: 'boolean', value: false,
+  description: 'rewrite local DISPLAY values to a network IPv4 address')
 option('frills', type: 'boolean', value: true,
   description: 'support for many small features that are not essential but nice to have')
 option('transparency', type: 'boolean', value: false,

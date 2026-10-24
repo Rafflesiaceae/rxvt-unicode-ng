@@ -310,6 +310,7 @@ endif
 # --- feature switches --------------------------------------------------------
 
 foreach switch : [
+  ['display-is-ip', 'DISPLAY_IS_IP'],
   ['font-styles', 'ENABLE_STYLES'],
   ['iso14755', 'ISO_14755'],
   ['8bitctrls', 'EIGHT_BIT_CONTROLS'],
