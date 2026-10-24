@@ -387,14 +387,14 @@ def cmd_configure(args):
 def cmd_build(args):
     ensure_configured()
     compile_(args.jobs)
-    if args.copy_lua_scripts_to_home:
+    if args.copy_lua_examples:
         # Match the plugin loader, which ignores relative XDG_CONFIG_HOME paths.
         config = os.environ.get("XDG_CONFIG_HOME", "")
         if not os.path.isabs(config):
             config = os.path.expanduser("~/.config")
         destination = os.path.join(config, "nrxvt", "plugins")
         os.makedirs(destination, exist_ok=True)
-        source = os.path.join(ROOT, "src", "lua")
+        source = os.path.join(ROOT, "examples")
         for name in sorted(os.listdir(source)):
             if name.endswith(".lua"):
                 print(f"+ copy {name} to {destination}", flush=True)
@@ -478,9 +478,9 @@ def main(argv=None):
         "build", parents=[jobs_parser], help="build, configuring first if needed"
     )
     p.add_argument(
-        "--copy-lua-scripts-to-home",
+        "--copy-lua-examples",
         action="store_true",
-        help="copy bundled Lua scripts to $XDG_CONFIG_HOME/nrxvt/plugins "
+        help="copy example Lua scripts to $XDG_CONFIG_HOME/nrxvt/plugins "
         "(default: ~/.config/nrxvt/plugins), overwriting matching files",
     )
     p.set_defaults(func=cmd_build)

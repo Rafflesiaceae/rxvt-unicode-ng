@@ -29,10 +29,3 @@ executable(rxvtname,
   dependencies: base_deps + x_deps,
   install: true,
 )
-
-# The example plugins are not active by default, they are meant to be
-# copied or linked into ~/.config/nrxvt/plugins.
-if have_lua
-  install_data('lua/keyboard-select.lua', 'lua/links.lua', 'lua/search.lua', 'lua/scrollbar.lua',
-    install_dir: get_option('datadir') / 'nrxvt' / 'lua')
-endif
